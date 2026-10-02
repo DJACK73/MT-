@@ -1,0 +1,12 @@
+services:
+  mt:
+    build: .
+    command: ["watch"]
+    volumes:
+      - ./inbox:/app/inbox:ro
+      - ./workspace:/app/workspace
+      - ./projects:/app/projects
+      - ./output:/app/output
+      - ./data:/app/data
+      - ./config:/app/config:ro
+    restart: unless-stopped
