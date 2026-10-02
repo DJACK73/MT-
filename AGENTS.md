@@ -26,6 +26,7 @@ Ne pas déclarer une vérification effectuée sans preuve réelle. Ne pas invent
 
 Lorsque l'utilisateur demande explicitement de poursuivre sans demander d'autorisation, Codex exécute les étapes normales déjà incluses dans le MVP sans confirmation intermédiaire.
 
-- L'autorisation explicite de poursuite peut valoir validation humaine d'un plan uniquement si elle est enregistrée dans le plan JSON et dans `docs/PROJECT_BRIEF.md`.
+- Aucune autorisation de poursuite ne vaut validation d'un plan. Seul l'utilisateur valide un plan, par une action humaine explicite (commande `approve`, à créer) qui enregistre `approved_hash`. Aucun rendu sans plan approuvé.
+- Interdits permanents : écraser une source, un plan ou un export ; modifier `inbox/` ; supprimer du code existant sans validation explicite de l'utilisateur.
 - Codex s'arrête seulement en cas de contradiction, risque de perte de données, élargissement matériel du périmètre, échec non reproductible ou besoin réel de choix utilisateur.
 - Les interdictions du brief restent applicables, notamment l'immutabilité de `inbox/`, l'absence de téléchargement de médias et l'absence de publication.
