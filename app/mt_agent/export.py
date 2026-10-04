@@ -3,6 +3,7 @@ from pathlib import Path
 from .approval import PlanError, assert_renderable, plan_id, save_plan
 from .ffx import run_ffmpeg
 from .models import Plan
+from .paths import ensure_outside_inbox
 
 PROFILES: dict[str, tuple[int, int]] = {"youtube": (1920, 1080), "vertical": (1080, 1920)}
 _TAIL = "setsar=1,fps=25,format=yuv420p"
@@ -38,6 +39,7 @@ def build_graph(plan: Plan) -> tuple[list[str], str]:
 def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20) -> tuple[Path, Path]:
     """Rend un plan approuvé. Retourne (mp4, json du plan rendu). Ne remplace jamais rien."""
     assert_renderable(plan)
+    ensure_outside_inbox(out_dir, root)
     rels, fc = build_graph(plan)
     srcs = [Path(r) if Path(r).is_absolute() else root / r for r in rels]
     missing = [str(p) for p in srcs if not p.is_file()]
