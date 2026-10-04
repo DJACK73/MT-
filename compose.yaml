@@ -8,3 +8,14 @@ services:
       - ./output:/app/output
       - ./data:/app/data
       - ./config:/app/config:ro
+  dashboard:
+    profiles: ["dashboard"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    ports:
+      - "127.0.0.1:8502:8501"
+    volumes:
+      - ./inbox:/app/inbox:ro
+      - ./workspace:/app/workspace
+      - ./output:/app/output
