@@ -1,0 +1,9 @@
+.venv-lab/
+inbox/
+output/
+workspace/
+data/
+.git/
+*.mp4
+*.sqlite
+__pycache__/
