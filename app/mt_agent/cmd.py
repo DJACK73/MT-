@@ -9,6 +9,7 @@ from .ffx import MediaError, duration
 from .models import Options, Plan, Scene, Source
 from .paths import ROOT, ensure_outside_inbox
 from .scenes import merge_short
+from .selection import select_scenes
 
 def scan_video(video: Path, root: Path, opt: Options, select_all: bool = True) -> Plan:
     if not video.is_file():
@@ -37,6 +38,10 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     s.add_argument("--select", choices=["all", "none"], default="all")
     sub.add_parser("approve", help="plan en attente -> plan approuvé").add_argument("plan")
     sub.add_parser("export", help="rend un plan approuvé").add_argument("plan")
+    sub.add_parser("scenes", help="liste les scènes d'un plan").add_argument("plan")
+    q = sub.add_parser("select", help="choisit les scènes (ex. 1-5,8) -> nouveau plan en attente")
+    q.add_argument("plan")
+    q.add_argument("spec")
     a = ap.parse_args(argv)
     try:
         if a.cmd == "scan":
@@ -48,6 +53,12 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
         elif a.cmd == "approve":
             plan = _load(a.plan)
             print(save_plan(approve(plan), Path(a.plan).resolve().parent))
+        elif a.cmd == "scenes":
+            for i, sc in enumerate(_load(a.plan).scenes, 1):
+                print(f"{i:>3}  {sc.start:8.2f} -> {sc.end:8.2f}  {sc.end - sc.start:6.2f}s  {'x' if sc.selected else '.'}")
+        elif a.cmd == "select":
+            out_dir = ensure_outside_inbox(Path(a.plan).resolve().parent, root)
+            print(save_plan(select_scenes(_load(a.plan), a.spec), out_dir))
         else:
             mp4, done = export_plan(_load(a.plan), root, root / "output")
             print(mp4); print(done)
