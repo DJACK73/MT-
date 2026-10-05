@@ -8,6 +8,7 @@ from mt_agent.models import Plan
 from mt_agent.paths import ROOT
 from mt_agent.selection import select_scenes
 from mt_agent.thumbs import make_thumbnails
+from mt_agent.preview import preview_clip
 
 PLANS = ROOT / "workspace" / "plans"
 ERRORS = (PlanError, ValidationError, ValueError, OSError, RuntimeError)
@@ -82,6 +83,16 @@ def main() -> None:
     for i, (sc, t) in enumerate(zip(plan.scenes, thumbs), 1):
         with cols[(i - 1) % COLS]:
             st.image(str(t), caption=f"{i} · {sc.end - sc.start:.1f}s {'✔' if sc.selected else '·'}")
+    n = int(st.number_input("Aperçu : scène n°", 1, len(plan.scenes), 1, key="prev_n"))
+    cur = plan.scenes[n - 1]
+    st.caption(f"Scène {n} : {cur.start:.2f} à {cur.end:.2f} s ({cur.end - cur.start:.1f} s)")
+    srcs = {x.id: Path(x.path) if Path(x.path).is_absolute() else ROOT / x.path for x in plan.sources}
+    try:
+        with st.spinner("Extraction de l'aperçu…"):
+            clip = preview_clip(srcs[cur.source_id], cur.start, cur.end, ROOT)
+        st.video(str(clip))
+    except Exception as e:  # bord UI : afficher l'erreur sans planter la page
+        st.error(f"Aperçu impossible : {e}")
     st.text_input("Sélection (ex. 1-5,8)", key="spec")
     st.button("Appliquer la sélection", on_click=on_select)
     st.button("Approuver", on_click=on_approve, disabled=plan.status != "pending_human_review")
