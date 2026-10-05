@@ -51,3 +51,17 @@ class Dashboard(unittest.TestCase):
         _btn(at, "Exporter").click().run()
         self.assertEqual(len(at.exception), 0)
         self.assertEqual(len(list(self.out.glob("*.mp4"))), 1)
+
+    def test_cases(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=60).run()
+        self.assertEqual(len(at.checkbox), 3)
+        at.checkbox[0].check().run()
+        at.checkbox[2].check().run()
+        _btn(at, "Appliquer la sélection").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(_metric(at, "Scènes"), "2/3")
+        self.assertEqual([c.value for c in at.checkbox], [True, False, True])
+        _btn(at, "Tout cocher").click().run()
+        self.assertEqual([c.value for c in at.checkbox], [True, True, True])
+        _btn(at, "Tout décocher").click().run()
+        self.assertEqual([c.value for c in at.checkbox], [False, False, False])

@@ -24,3 +24,18 @@ def select_scenes(plan: Plan, spec: str) -> Plan:
     keep = parse_selection(spec, len(plan.scenes))
     scenes = [s.model_copy(update={"selected": (i + 1) in keep}) for i, s in enumerate(plan.scenes)]
     return plan.model_copy(update={"scenes": scenes, "status": "pending_human_review", "approved_hash": None})
+
+def spec_from_flags(flags: list[bool]) -> str:
+    """[T,F,T,T,T] -> '1,3-5' (numéros à partir de 1). Aucune case cochée -> ''."""
+    out: list[str] = []
+    i = 0
+    while i < len(flags):
+        if not flags[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < len(flags) and flags[j + 1]:
+            j += 1
+        out.append(str(i + 1) if i == j else f"{i + 1}-{j + 1}")
+        i = j + 1
+    return ",".join(out)

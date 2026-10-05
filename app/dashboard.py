@@ -8,6 +8,7 @@ from mt_agent.models import Plan
 from mt_agent.paths import ROOT
 from mt_agent.selection import select_scenes
 from mt_agent.thumbs import make_thumbnails
+from mt_agent.selection import spec_from_flags
 from mt_agent.preview import preview_clip
 
 PLANS = ROOT / "workspace" / "plans"
@@ -45,7 +46,16 @@ def _switch(new: Path) -> None:
 def on_select() -> None:
     path = Path(st.session_state["plan_path"])
     try:
-        _switch(save_plan(select_scenes(load(path), st.session_state.get("spec", "")), path.parent))
+        plan = load(path)
+        spec = st.session_state.get("spec", "").strip()
+        if not spec:
+            spec = spec_from_flags([bool(st.session_state.get(f"sel:{path.name}:{i}"))
+                                    for i in range(1, len(plan.scenes) + 1)])
+        if not spec:
+            _flash("error", "Aucune scène cochée ni numéro saisi")
+            return
+        _switch(save_plan(select_scenes(plan, spec), path.parent))
+        st.session_state["spec"] = ""
     except ERRORS as e:
         _flash("error", str(e))
 
@@ -56,6 +66,12 @@ def on_approve() -> None:
         _switch(save_plan(approve(load(path)), path.parent))
     except ERRORS as e:
         _flash("error", str(e))
+
+
+def on_all(value: bool) -> None:
+    path = Path(st.session_state["plan_path"])
+    for i in range(1, len(load(path).scenes) + 1):
+        st.session_state[f"sel:{path.name}:{i}"] = value
 
 
 def main() -> None:
@@ -79,10 +95,15 @@ def main() -> None:
     thumbs = make_thumbnails(plan, ROOT)
     if len(thumbs) != len(plan.scenes):
         st.warning(f"{len(thumbs)} vignettes pour {len(plan.scenes)} scènes")
+    pk = Path(st.session_state["plan_path"]).name
     cols = st.columns(COLS)
     for i, (sc, t) in enumerate(zip(plan.scenes, thumbs), 1):
         with cols[(i - 1) % COLS]:
-            st.image(str(t), caption=f"{i} · {sc.end - sc.start:.1f}s {'✔' if sc.selected else '·'}")
+            st.image(str(t), caption=f"{i} · {sc.end - sc.start:.1f}s")
+            k = f"sel:{pk}:{i}"
+            if k not in st.session_state:
+                st.session_state[k] = sc.selected
+            st.checkbox("garder", key=k)
     n = int(st.number_input("Aperçu : scène n°", 1, len(plan.scenes), 1, key="prev_n"))
     cur = plan.scenes[n - 1]
     st.caption(f"Scène {n} : {cur.start:.2f} à {cur.end:.2f} s ({cur.end - cur.start:.1f} s)")
@@ -93,7 +114,13 @@ def main() -> None:
         st.video(str(clip))
     except Exception as e:  # bord UI : afficher l'erreur sans planter la page
         st.error(f"Aperçu impossible : {e}")
+    flags = [bool(st.session_state.get(f"sel:{pk}:{i}")) for i in range(1, len(plan.scenes) + 1)]
+    st.caption(f"Cochées : {sum(flags)}/{len(flags)}")
+    b1, b2, _ = st.columns([1, 1, 6])
+    b1.button("Tout cocher", on_click=on_all, args=(True,))
+    b2.button("Tout décocher", on_click=on_all, args=(False,))
     st.text_input("Sélection (ex. 1-5,8)", key="spec")
+    st.caption("Si ce champ est rempli, il remplace les cases cochées.")
     st.button("Appliquer la sélection", on_click=on_select)
     st.button("Approuver", on_click=on_approve, disabled=plan.status != "pending_human_review")
     if st.button("Exporter", disabled=not is_approved(plan)):
