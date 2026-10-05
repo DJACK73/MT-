@@ -10,6 +10,7 @@ from mt_agent.selection import select_scenes
 from mt_agent.thumbs import make_thumbnails
 from mt_agent.selection import spec_from_flags
 from mt_agent.preview import preview_clip
+from mt_agent.fit import window_flag
 
 PLANS = ROOT / "workspace" / "plans"
 ERRORS = (PlanError, ValidationError, ValueError, OSError, RuntimeError)
@@ -68,6 +69,18 @@ def on_approve() -> None:
         _flash("error", str(e))
 
 
+@st.dialog("Aperçu", width="large")
+def show_clip(i: int) -> None:
+    plan = load(Path(st.session_state["plan_path"]))
+    sc = plan.scenes[i - 1]
+    srcs = {x.id: Path(x.path) if Path(x.path).is_absolute() else ROOT / x.path for x in plan.sources}
+    st.caption(f"Scène {i} : {sc.start:.2f} à {sc.end:.2f} s · durée {sc.end - sc.start:.2f} s")
+    try:
+        st.video(str(preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT)))
+    except Exception as e:  # bord UI : afficher l'erreur sans planter la page
+        st.error(f"Aperçu impossible : {e}")
+
+
 def on_all(value: bool) -> None:
     path = Path(st.session_state["plan_path"])
     for i in range(1, len(load(path).scenes) + 1):
@@ -96,24 +109,22 @@ def main() -> None:
     if len(thumbs) != len(plan.scenes):
         st.warning(f"{len(thumbs)} vignettes pour {len(plan.scenes)} scènes")
     pk = Path(st.session_state["plan_path"]).name
+    m1, m2, _ = st.columns([1, 1, 6])
+    lo = m1.number_input("Min (s)", 0.0, 60.0, 3.0, 0.5, key="win_lo")
+    hi = m2.number_input("Max (s)", 0.5, 120.0, 5.0, 0.5, key="win_hi")
+    bad = sum(1 for x in plan.scenes if window_flag(x.end - x.start, lo, hi))
+    st.caption(f"Hors fenêtre {lo:g}–{hi:g} s : {bad} scène(s). ▼ trop courte, ▲ trop longue.")
     cols = st.columns(COLS)
     for i, (sc, t) in enumerate(zip(plan.scenes, thumbs), 1):
         with cols[(i - 1) % COLS]:
-            st.image(str(t), caption=f"{i} · {sc.end - sc.start:.1f}s")
+            dur = sc.end - sc.start
+            st.image(str(t), caption=f"{i} · {dur:.2f}s {window_flag(dur, lo, hi)}".rstrip())
             k = f"sel:{pk}:{i}"
             if k not in st.session_state:
                 st.session_state[k] = sc.selected
             st.checkbox("garder", key=k)
-    n = int(st.number_input("Aperçu : scène n°", 1, len(plan.scenes), 1, key="prev_n"))
-    cur = plan.scenes[n - 1]
-    st.caption(f"Scène {n} : {cur.start:.2f} à {cur.end:.2f} s ({cur.end - cur.start:.1f} s)")
-    srcs = {x.id: Path(x.path) if Path(x.path).is_absolute() else ROOT / x.path for x in plan.sources}
-    try:
-        with st.spinner("Extraction de l'aperçu…"):
-            clip = preview_clip(srcs[cur.source_id], cur.start, cur.end, ROOT)
-        st.video(str(clip))
-    except Exception as e:  # bord UI : afficher l'erreur sans planter la page
-        st.error(f"Aperçu impossible : {e}")
+            if st.button("▶ voir", key=f"v:{pk}:{i}"):
+                show_clip(i)
     flags = [bool(st.session_state.get(f"sel:{pk}:{i}")) for i in range(1, len(plan.scenes) + 1)]
     st.caption(f"Cochées : {sum(flags)}/{len(flags)}")
     b1, b2, _ = st.columns([1, 1, 6])

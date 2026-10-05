@@ -52,3 +52,11 @@ def fit_window(bounds: list[float], min_s: float, max_s: float) -> list[Span]:
         out.append((s, e))
         s = e
     return out
+
+def window_flag(duration: float, lo: float, hi: float, eps: float = 0.005) -> str:
+    """'▼' sous le minimum, '▲' au-dessus du maximum, '' dans la fenêtre (tolérance eps)."""
+    if duration < lo - eps:
+        return "▼"
+    if duration > hi + eps:
+        return "▲"
+    return ""
