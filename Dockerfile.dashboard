@@ -8,7 +8,6 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-dashboard.txt
 COPY app /app/app
 COPY config /app/config
 ENV PYTHONPATH=/app/app PYTHONUNBUFFERED=1 MT_HOME=/app
-ENV STREAMLIT_THEME_PRIMARY_COLOR=#16a34a
 RUN useradd -u 1000 -m mt
 USER mt
 EXPOSE 8501

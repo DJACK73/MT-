@@ -23,6 +23,8 @@ STATUS_FR = {"pending_human_review": "À valider", "approved": "Approuvé", "ren
 CSS = (
     "<style>.block-container{padding-top:1.5rem}"
     "[data-testid='stImage'] img{border-radius:8px}"
+    "button[kind='primary'],[data-testid='stBaseButton-primary']{background-color:#16a34a;border-color:#16a34a;color:#fff}"
+    "button[kind='primary']:hover,[data-testid='stBaseButton-primary']:hover{background-color:#15803d;border-color:#15803d;color:#fff}"
     "[class*='st-key-card_']{border-radius:12px;transition:all .15s}"
     "[class*='st-key-card_']:has(input:checked){box-shadow:0 0 0 2px #16a34a;background:rgba(22,163,74,.10)}"
     "[class*='st-key-card_']:has(input:not(:checked)){opacity:.55}"
