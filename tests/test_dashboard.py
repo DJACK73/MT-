@@ -65,3 +65,12 @@ class Dashboard(unittest.TestCase):
         self.assertEqual([c.value for c in at.checkbox], [True, True, True])
         _btn(at, "Tout décocher").click().run()
         self.assertEqual([c.value for c in at.checkbox], [False, False, False])
+
+    def test_decouper(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        self.assertEqual(len(at.exception), 0)
+        _btn(at, "Découper").click().run()
+        self.assertEqual(len(at.exception), 0)
+        maxes = [Plan.model_validate_json(f.read_text()).options.max_scene_seconds
+                 for f in (self.r / "workspace" / "plans").iterdir()]
+        self.assertIn(5.0, maxes)

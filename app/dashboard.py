@@ -3,8 +3,10 @@ from pathlib import Path
 import streamlit as st
 from pydantic import ValidationError
 from mt_agent.approval import PlanError, approve, is_approved, save_plan
+from mt_agent.cmd import scan_video
+from mt_agent.ffx import MediaError
 from mt_agent.export import export_plan
-from mt_agent.models import Plan
+from mt_agent.models import Options, Plan
 from mt_agent.paths import ROOT
 from mt_agent.selection import select_scenes
 from mt_agent.thumbs import make_thumbnails
@@ -14,7 +16,8 @@ from mt_agent.fit import window_flag
 from mt_agent.clean import plan_clean, run_clean, size_of
 
 PLANS = ROOT / "workspace" / "plans"
-ERRORS = (PlanError, ValidationError, ValueError, OSError, RuntimeError)
+ERRORS = (PlanError, ValidationError, ValueError, OSError, RuntimeError, MediaError)
+VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"}
 COLS = 6
 
 
@@ -70,7 +73,7 @@ def on_approve() -> None:
         _flash("error", str(e))
 
 
-@st.dialog("Aperçu", width="large")
+@st.dialog("Aperçu", width="small")
 def show_clip(i: int) -> None:
     plan = load(Path(st.session_state["plan_path"]))
     sc = plan.scenes[i - 1]
@@ -80,6 +83,40 @@ def show_clip(i: int) -> None:
         st.video(str(preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT)))
     except Exception as e:  # bord UI : afficher l'erreur sans planter la page
         st.error(f"Aperçu impossible : {e}")
+
+
+def list_videos(d: Path) -> list[str]:
+    if not d.is_dir():
+        return []
+    return sorted(x.name for x in d.iterdir() if x.is_file() and x.suffix.lower() in VIDEO_EXT)
+
+
+def render_scan() -> None:
+    st.subheader("1. Découper une vidéo")
+    videos = list_videos(ROOT / "inbox")
+    if not videos:
+        st.info("Aucune vidéo dans inbox/. Dépose-en via l'Explorateur, puis recharge la page.")
+        return
+    st.selectbox("Vidéo (inbox/)", videos, key="scan_video")
+    s1, s2, _ = st.columns([1, 1, 6])
+    lo = s1.number_input("Min (s)", 0.5, 60.0, 3.0, 0.5, key="scan_lo")
+    hi = s2.number_input("Max (s)", 0.5, 120.0, 5.0, 0.5, key="scan_hi")
+    st.caption("Les durées sont fixées à la découpe : changer Min/Max puis Découper crée un nouveau plan.")
+    if st.button("Découper"):
+        if hi < lo:
+            st.error("Max doit être supérieur ou égal à Min")
+            return
+        with st.spinner("Découpe en cours…"):
+            try:
+                PLANS.mkdir(parents=True, exist_ok=True)
+                opt = Options(min_scene_seconds=lo, max_scene_seconds=hi)
+                plan = scan_video(ROOT / "inbox" / st.session_state["scan_video"], ROOT, opt, True)
+                new = save_plan(plan, PLANS)
+            except ERRORS as e:
+                st.error(str(e))
+                return
+        _switch(new)
+        st.rerun()
 
 
 def on_all(value: bool) -> None:
@@ -131,9 +168,11 @@ def main() -> None:
     flash = st.session_state.pop("flash", None)
     if flash:
         getattr(st, flash[0])(flash[1])
+    render_scan()
+    st.divider()
     plans = list_plans(PLANS)
     if not plans:
-        st.info("Aucun plan dans workspace/plans. Lancer `scan` d'abord.")
+        st.info("Aucun plan. Découpe une vidéo ci-dessus.")
         render_clean()
         return
     st.selectbox("Plan", plans, key="plan_path", format_func=lambda s: Path(s).name)
@@ -148,11 +187,14 @@ def main() -> None:
     if len(thumbs) != len(plan.scenes):
         st.warning(f"{len(thumbs)} vignettes pour {len(plan.scenes)} scènes")
     pk = Path(st.session_state["plan_path"]).name
-    m1, m2, _ = st.columns([1, 1, 6])
-    lo = m1.number_input("Min (s)", 0.0, 60.0, 3.0, 0.5, key="win_lo")
-    hi = m2.number_input("Max (s)", 0.5, 120.0, 5.0, 0.5, key="win_hi")
+    lo = plan.options.min_scene_seconds
+    mx = plan.options.max_scene_seconds
+    hi = float("inf") if mx is None else mx
     bad = sum(1 for x in plan.scenes if window_flag(x.end - x.start, lo, hi))
-    st.caption(f"Hors fenêtre {lo:g}–{hi:g} s : {bad} scène(s). ▼ trop courte, ▲ trop longue.")
+    if mx is None:
+        st.caption(f"Plan découpé avec min {lo:g} s, sans max.")
+    else:
+        st.caption(f"Plan découpé en fenêtre {lo:g}–{mx:g} s : {bad} scène(s) hors fenêtre. ▼ trop courte, ▲ trop longue.")
     cols = st.columns(COLS)
     for i, (sc, t) in enumerate(zip(plan.scenes, thumbs), 1):
         with cols[(i - 1) % COLS]:
