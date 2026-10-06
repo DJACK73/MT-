@@ -62,3 +62,17 @@ class CleanTest(unittest.TestCase):
             run_clean(self.root, 3)
         self.assertEqual(_names(self.root, "output"), {"o.mp4"})
         self.assertEqual(_names(self.root, "workspace/plans"), {"a.json"})
+
+
+    def test_clips_supprimes_niveaux_2_et_3_gardes_niveau_1(self) -> None:
+        clip = self.root / "output/clips/src-abcd1234/001.mp4"
+        clip.parent.mkdir(parents=True)
+        clip.write_bytes(b"x")
+        run_clean(self.root, 1)
+        self.assertTrue(clip.exists())
+        for level in (2, 3):
+            clip.parent.mkdir(parents=True, exist_ok=True)
+            clip.write_bytes(b"x")
+            self.assertIn(self.root.resolve() / "output" / "clips", plan_clean(self.root, level))
+            run_clean(self.root, level)
+            self.assertEqual(_names(self.root, "output"), set())
