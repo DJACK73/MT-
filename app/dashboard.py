@@ -11,6 +11,7 @@ from mt_agent.thumbs import make_thumbnails
 from mt_agent.selection import spec_from_flags
 from mt_agent.preview import preview_clip
 from mt_agent.fit import window_flag
+from mt_agent.clean import plan_clean, run_clean, size_of
 
 PLANS = ROOT / "workspace" / "plans"
 ERRORS = (PlanError, ValidationError, ValueError, OSError, RuntimeError)
@@ -87,6 +88,43 @@ def on_all(value: bool) -> None:
         st.session_state[f"sel:{path.name}:{i}"] = value
 
 
+CLEAN_LABELS = {
+    1: "Nettoyer les découpes",
+    2: "Nettoyer découpes + output",
+    3: "Nettoyer découpes + output + inbox",
+}
+
+
+@st.dialog("Confirmer le nettoyage")
+def confirm_clean(level: int) -> None:
+    todo = plan_clean(ROOT, level)
+    total = sum(size_of(p) for p in todo)
+    st.write(f"{CLEAN_LABELS[level]} : {len(todo)} élément(s), {total / 1e6:.1f} Mo. Irréversible.")
+    if level == 3:
+        st.warning("Les vidéos originales de inbox/ seront supprimées.")
+    if st.button("Confirmer", type="primary", key=f"clean_ok_{level}"):
+        try:
+            done, errs = run_clean(ROOT, level)
+        except ERRORS as e:
+            _flash("error", str(e))
+        else:
+            msg = f"{done} élément(s) supprimé(s)"
+            if errs:
+                msg += " · erreurs : " + "; ".join(errs)
+            _flash("error" if errs else "success", msg)
+        st.session_state.pop("plan_path", None)
+        st.rerun()
+
+
+def render_clean() -> None:
+    st.divider()
+    st.subheader("Nettoyage")
+    st.caption("À faire une fois les exports terminés. Confirmation demandée. workspace/archive-* n'est jamais touché.")
+    for lvl, col in zip((1, 2, 3), st.columns(3)):
+        if col.button(CLEAN_LABELS[lvl], key=f"clean_{lvl}"):
+            confirm_clean(lvl)
+
+
 def main() -> None:
     st.set_page_config(page_title="MT", layout="wide")
     st.title("MT")
@@ -96,6 +134,7 @@ def main() -> None:
     plans = list_plans(PLANS)
     if not plans:
         st.info("Aucun plan dans workspace/plans. Lancer `scan` d'abord.")
+        render_clean()
         return
     st.selectbox("Plan", plans, key="plan_path", format_func=lambda s: Path(s).name)
     path = Path(st.session_state["plan_path"])
@@ -143,5 +182,6 @@ def main() -> None:
             else:
                 st.success(f"{mp4.name} · {done.name}")
 
+    render_clean()
 
 main()
