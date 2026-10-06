@@ -6,16 +6,24 @@ from .approval import PlanError, approve, plan_id, save_plan
 from .cuts import detect_cuts
 from .export import export_plan
 from .ffx import MediaError, duration
+from .fit import fit_window
 from .models import Options, Plan, Scene, Source
 from .paths import ROOT, ensure_outside_inbox
 from .scenes import merge_short
 from .selection import select_scenes
 
+def plan_spans(cuts: list[float], total: float, min_s: float, max_s: float | None) -> list[tuple[float, float]]:
+    """Sans max : fusion à min_s (comportement historique). Avec max : pré-fusion fixe à 1,0 s puis fit_window."""
+    if max_s is None:
+        return merge_short(cuts, total, min_s)
+    spans = merge_short(cuts, total, 1.0)
+    return fit_window([0.0, *[b for _, b in spans]], min_s, max_s)
+
 def scan_video(video: Path, root: Path, opt: Options, select_all: bool = True) -> Plan:
     if not video.is_file():
         raise PlanError(f"vidéo introuvable: {video}")
     total = duration(str(video))
-    spans = merge_short(detect_cuts(str(video), opt.threshold), total, opt.min_scene_seconds)
+    spans = plan_spans(detect_cuts(str(video), opt.threshold), total, opt.min_scene_seconds, opt.max_scene_seconds)
     try:
         rel = str(video.resolve().relative_to(root.resolve()))
     except ValueError:
@@ -33,6 +41,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     s.add_argument("video")
     s.add_argument("--threshold", type=float, default=0.35)
     s.add_argument("--min-scene", type=float, default=1.0)
+    s.add_argument("--max-scene", type=float, default=None)
     s.add_argument("--framing", choices=["blur_pad", "crop_center"], default="blur_pad")
     s.add_argument("--profile", choices=["youtube", "vertical"], default="vertical")
     s.add_argument("--select", choices=["all", "none"], default="all")
@@ -45,7 +54,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
     a = ap.parse_args(argv)
     try:
         if a.cmd == "scan":
-            opt = Options(threshold=a.threshold, min_scene_seconds=a.min_scene, framing=a.framing, profile=a.profile)
+            opt = Options(threshold=a.threshold, min_scene_seconds=a.min_scene, max_scene_seconds=a.max_scene, framing=a.framing, profile=a.profile)
             plan = scan_video(Path(a.video), root, opt, a.select == "all")
             out_dir = ensure_outside_inbox(root / "workspace" / "plans", root)
             print(save_plan(plan, out_dir))
@@ -62,7 +71,7 @@ def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
         else:
             mp4, done = export_plan(_load(a.plan), root, root / "output")
             print(mp4); print(done)
-    except (PlanError, MediaError, PermissionError, ValidationError, OSError) as e:
+    except (PlanError, MediaError, PermissionError, ValidationError, ValueError, OSError) as e:
         print(f"ERREUR: {e}", file=sys.stderr)
         return 1
     return 0

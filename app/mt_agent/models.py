@@ -30,6 +30,7 @@ class Options(Strict):
     min_scene_seconds: float = 1.0
     framing: Literal["blur_pad", "crop_center"] = "blur_pad"
     profile: Literal["youtube", "vertical"] = "vertical"
+    max_scene_seconds: float | None = Field(default=None, gt=0)
 
 class Plan(Strict):
     version: Literal[2] = 2
@@ -41,4 +42,6 @@ class Plan(Strict):
 
     def content_hash(self) -> str:
         d = self.model_dump(mode="json", exclude={"approved_hash", "status"})
+        if d["options"].get("max_scene_seconds") is None:
+            d["options"].pop("max_scene_seconds", None)
         return hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()
