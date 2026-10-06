@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections.abc import Callable
 from pathlib import Path
 from .approval import PlanError, assert_renderable, plan_id, save_plan
 from .ffx import run_ffmpeg
@@ -57,3 +58,44 @@ def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20) -> tuple[P
     run_ffmpeg(args, out)
     done = save_plan(plan.model_copy(update={"status": "rendered"}), out_dir)
     return out, done
+
+def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
+                 on_progress: Callable[[int, int], None] | None = None) -> list[Path]:
+    """Un mp4 par scène sélectionnée, non collés : out_dir/clips/<source>-<plan_id[:8]>/NNN.mp4.
+    NNN = numéro (base 1) de la scène dans le plan. Ne remplace rien, ne change pas le statut.
+    En cas d'échec au milieu, les clips déjà écrits restent."""
+    assert_renderable(plan)
+    ensure_outside_inbox(out_dir, root)
+    chosen = [(n, sc) for n, sc in enumerate(plan.scenes, 1) if sc.selected]
+    if not chosen:
+        raise PlanError("aucune scène sélectionnée")
+    paths = {s.id: s.path for s in plan.sources}
+    srcs: dict[str, Path] = {}
+    for _, sc in chosen:
+        if sc.source_id not in paths:
+            raise PlanError(f"source inconnue: {sc.source_id}")
+        p = Path(paths[sc.source_id])
+        srcs[sc.source_id] = p if p.is_absolute() else root / p
+    missing = [str(p) for p in srcs.values() if not p.is_file()]
+    if missing:
+        raise PlanError(f"sources absentes: {missing}")
+    w, h = PROFILES[plan.options.profile]
+    stem = Path(paths[chosen[0][1].source_id]).stem
+    folder = out_dir / "clips" / f"{stem}-{plan_id(plan)[:8]}"
+    try:
+        folder.mkdir(parents=True, exist_ok=False)
+    except FileExistsError as e:
+        raise PlanError(f"dossier déjà présent: {folder}") from e
+    done: list[Path] = []
+    for k, (n, sc) in enumerate(chosen, 1):
+        d = sc.end - sc.start
+        node = _node(0, 0, 0.0, d, plan.options.framing, w, h)
+        args = ["-ss", f"{sc.start:.3f}", "-t", f"{d:.3f}", "-i", str(srcs[sc.source_id]),
+                "-filter_complex", node, "-map", "[v0]", "-c:v", "libx264", "-crf", str(crf),
+                "-preset", "veryfast", "-movflags", "+faststart"]
+        dest = folder / f"{n:03d}.mp4"
+        run_ffmpeg(args, dest)
+        done.append(dest)
+        if on_progress is not None:
+            on_progress(k, len(chosen))
+    return done
