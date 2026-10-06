@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from mt_agent.approval import PlanError, approve, is_approved, save_plan
 from mt_agent.cmd import scan_video
 from mt_agent.ffx import MediaError
-from mt_agent.export import export_plan
+from mt_agent.export import export_clips, export_plan
 from mt_agent.models import Options, Plan
 from mt_agent.paths import ROOT
 from mt_agent.selection import select_scenes
@@ -223,6 +223,18 @@ def main() -> None:
                 st.error(str(e))
             else:
                 st.success(f"{mp4.name} · {done.name}")
+    if st.button("Exporter en clips séparés", disabled=not is_approved(plan)):
+        bar = st.progress(0.0, text="Rendu des clips…")
+
+        def _tick(k: int, n: int) -> None:
+            bar.progress(k / n, text=f"Clip {k}/{n}")
+
+        try:
+            files = export_clips(plan, ROOT, ROOT / "output", on_progress=_tick)
+        except ERRORS as e:
+            st.error(str(e))
+        else:
+            st.success(f"{len(files)} clips · {files[0].parent.relative_to(ROOT)}")
 
     render_clean()
 

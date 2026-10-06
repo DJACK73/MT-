@@ -74,3 +74,17 @@ class Dashboard(unittest.TestCase):
         maxes = [Plan.model_validate_json(f.read_text()).options.max_scene_seconds
                  for f in (self.r / "workspace" / "plans").iterdir()]
         self.assertIn(5.0, maxes)
+
+    def test_clips(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        self.assertTrue(_btn(at, "Exporter en clips séparés").disabled)
+        at.text_input(key="spec").set_value("1-2").run()
+        _btn(at, "Appliquer la sélection").click().run()
+        _btn(at, "Approuver").click().run()
+        self.assertFalse(_btn(at, "Exporter en clips séparés").disabled)
+        _btn(at, "Exporter en clips séparés").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        self.assertEqual(sorted(f.name for f in self.out.glob("clips/*/*.mp4")), ["001.mp4", "002.mp4"])
+        self.assertEqual(list(self.out.glob("*.mp4")), [])
+        self.assertFalse(_btn(at, "Exporter").disabled)
