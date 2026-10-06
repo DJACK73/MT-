@@ -20,7 +20,15 @@ ERRORS = (PlanError, ValidationError, ValueError, OSError, RuntimeError, MediaEr
 VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"}
 COLS = 5
 STATUS_FR = {"pending_human_review": "À valider", "approved": "Approuvé", "rendered": "Rendu"}
-CSS = "<style>.block-container{padding-top:1.5rem}[data-testid='stImage'] img{border-radius:6px}</style>"
+CSS = (
+    "<style>.block-container{padding-top:1.5rem}"
+    "[data-testid='stImage'] img{border-radius:8px}"
+    "[class*='st-key-card_']{border-radius:12px;transition:all .15s}"
+    "[class*='st-key-card_']:has(input:checked){box-shadow:0 0 0 2px #16a34a;background:rgba(22,163,74,.10)}"
+    "[class*='st-key-card_']:has(input:not(:checked)){opacity:.55}"
+    "[class*='st-key-card_']:hover{opacity:1}"
+    "</style>"
+)
 
 
 def load(p: Path) -> Plan:
@@ -185,7 +193,8 @@ def confirm_clean(level: int) -> None:
 def render_clean() -> None:
     with st.expander("Nettoyage (à faire à la fin, après les exports)"):
         st.caption("Confirmation demandée. workspace/archive-* n'est jamais touché.")
-        for lvl, col in zip((1, 2, 3), st.columns(3)):
+        st.caption("Pour vider inbox/ : supprime les vidéos dans l'Explorateur Windows (inbox/ est en lecture seule ici).")
+        for lvl, col in zip((1, 2), st.columns(2)):
             if col.button(CLEAN_LABELS[lvl], key=f"clean_{lvl}", use_container_width=True):
                 confirm_clean(lvl)
 
@@ -245,18 +254,39 @@ def main() -> None:
     c1.metric("Statut", STATUS_FR[plan.status])
     c2.metric("Scènes", f"{sum(saved)}/{len(saved)}")
     c3.metric("Durée retenue", f"{kept:.1f} s")
+    saved_any = any(saved)
+    if plan.status == "rendered" and not dirty:
+        step = 4
+    elif approved and not dirty:
+        step = 3
+    elif saved_any and not dirty:
+        step = 2
+    else:
+        step = 1
+    labels = ["Découper", "Choisir", "Approuver", "Exporter"]
+    st.markdown("  →  ".join(
+        f":green[✓ {n}]" if j < step else f"**:orange[● {n}]**" if j == step else f":gray[{n}]"
+        for j, n in enumerate(labels)))
+    lo = plan.options.min_scene_seconds
+    mx = plan.options.max_scene_seconds
+    hi = float("inf") if mx is None else mx
+    bad = sum(1 for x in plan.scenes if window_flag(x.end - x.start, lo, hi))
+    if mx is not None and bad * 2 > len(plan.scenes):
+        st.warning(f"{bad}/{len(plan.scenes)} scènes hors fenêtre : la fenêtre {lo:g}–{mx:g} s est trop étroite. "
+                   "Refais la découpe avec un Max plus grand (ex. 5 s) dans « ① Découper une vidéo ».")
     if dirty:
         st.warning("Sélection modifiée, pas encore enregistrée : clique « Appliquer la sélection ».")
     elif plan.status == "rendered":
         st.success("Plan déjà rendu.")
     elif approved:
-        st.success("Approuvé : tu peux exporter.")
+        st.success("Approuvé : choisis un export ci-dessous.")
     elif plan.status == "approved":
         st.warning("Plan modifié depuis l'approbation : approbation invalide.")
-    elif not any(saved):
-        st.info("③ Coche les scènes à garder (ou saisis des numéros), puis « Appliquer la sélection ».")
+    elif not saved_any:
+        st.info("Coche les scènes à garder (ou saisis des numéros), puis « Appliquer la sélection ».")
     else:
-        st.info("④ Sélection enregistrée : clique « Approuver » pour débloquer l'export.")
+        st.info("Sélection enregistrée : clique « Approuver » pour débloquer l'export.")
+    t1, t2, t3, t4 = st.columns([1, 1, 1, 3])
     t1, t2, t3, t4 = st.columns([1, 1, 1, 3])
     t1.button("Tout cocher", on_click=on_all, args=(True,), use_container_width=True)
     t2.button("Tout décocher", on_click=on_all, args=(False,), use_container_width=True)
@@ -281,24 +311,23 @@ def main() -> None:
     thumbs = make_thumbnails(plan, ROOT)
     if len(thumbs) != len(plan.scenes):
         st.warning(f"{len(thumbs)} vignettes pour {len(plan.scenes)} scènes")
-    lo = plan.options.min_scene_seconds
-    mx = plan.options.max_scene_seconds
-    hi = float("inf") if mx is None else mx
-    bad = sum(1 for x in plan.scenes if window_flag(x.end - x.start, lo, hi))
     if mx is None:
         st.caption(f"Plan découpé avec min {lo:g} s, sans max.")
     else:
         st.caption(f"Plan découpé en fenêtre {lo:g}–{mx:g} s : {bad} scène(s) hors fenêtre. ▼ trop courte, ▲ trop longue.")
     cols = st.columns(COLS)
     for i, (sc, th) in enumerate(zip(plan.scenes, thumbs), 1):
-        with cols[(i - 1) % COLS], st.container(border=True):
+        with cols[(i - 1) % COLS], st.container(border=True, key=f"card_{i}"):
             dur = sc.end - sc.start
-            st.image(str(th), caption=f"{i} · {dur:.2f} s {window_flag(dur, lo, hi)}".rstrip())
+            flag = window_flag(dur, lo, hi)
+            st.image(str(th))
+            st.caption(f"**{i}** · {dur:.2f} s" + (f" :orange[{flag}]" if flag else ""))
             k = f"sel:{pk}:{i}"
             if k not in st.session_state:
                 st.session_state[k] = sc.selected
-            st.checkbox("garder", key=k)
-            if st.button("▶ voir", key=f"v:{pk}:{i}", use_container_width=True):
+            g, v = st.columns([1, 1])
+            g.checkbox("garder", key=k)
+            if v.button("▶ voir", key=f"v:{pk}:{i}", use_container_width=True):
                 show_clip(i)
     render_clean()
 
