@@ -97,16 +97,32 @@ def on_approve() -> None:
         _flash("error", str(e))
 
 
+def _pv_move(step: int, n: int) -> None:
+    st.session_state["pv"] = min(max(int(st.session_state.get("pv", 1)) + step, 1), n)
+
+
 @st.dialog("Aperçu", width="small")
-def show_clip(i: int) -> None:
-    plan = load(Path(st.session_state["plan_path"]))
+def show_clip() -> None:
+    path = Path(st.session_state["plan_path"])
+    plan = load(path)
+    n = len(plan.scenes)
+    i = min(max(int(st.session_state.get("pv", 1)), 1), n)
     sc = plan.scenes[i - 1]
     srcs = {x.id: Path(x.path) if Path(x.path).is_absolute() else ROOT / x.path for x in plan.sources}
-    st.caption(f"Scène {i} : {sc.start:.2f} à {sc.end:.2f} s · durée {sc.end - sc.start:.2f} s")
+    kept = bool(st.session_state.get(f"sel:{path.name}:{i}", sc.selected))
+    st.markdown(f"**Scène {i}/{n}** · {sc.end - sc.start:.2f} s · " + (":green[✓ gardée]" if kept else ":red[✗ non gardée]"))
+    st.caption(f"{sc.start:.2f} → {sc.end:.2f} s dans la source")
     try:
-        st.video(str(preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT)))
+        with st.spinner("Préparation de l'aperçu…"):
+            clip = preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT)
+        st.video(str(clip))
     except Exception as e:  # bord UI : afficher l'erreur sans planter la page
         st.error(f"Aperçu impossible : {e}")
+    c1, c2 = st.columns(2)
+    c1.button("◀ Précédente", key="pv_prev", on_click=_pv_move, args=(-1, n), disabled=i <= 1, use_container_width=True)
+    c2.button("Suivante ▶", key="pv_next", on_click=_pv_move, args=(1, n), disabled=i >= n, use_container_width=True)
+    if st.button("OK, retour aux scènes", type="primary", key="pv_ok", use_container_width=True):
+        st.rerun()
 
 
 def list_videos(d: Path) -> list[str]:
@@ -328,7 +344,8 @@ def main() -> None:
             g, v = st.columns([1, 1])
             g.checkbox("garder", key=k)
             if v.button("▶ voir", key=f"v:{pk}:{i}", use_container_width=True):
-                show_clip(i)
+                st.session_state["pv"] = i
+                show_clip()
     render_clean()
 
 main()
