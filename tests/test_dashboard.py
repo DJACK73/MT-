@@ -88,3 +88,14 @@ class Dashboard(unittest.TestCase):
         self.assertEqual(sorted(f.name for f in self.out.glob("clips/*/*.mp4")), ["001.mp4", "002.mp4"])
         self.assertEqual(list(self.out.glob("*.mp4")), [])
         self.assertFalse(_btn(at, "Exporter la vidéo assemblée").disabled)
+
+    def test_decouper_en_lot(self) -> None:
+        (self.r / "inbox" / "t.mp4").write_bytes((self.r / "inbox" / "s.mp4").read_bytes())
+        at = AppTest.from_file(str(APP), default_timeout=180).run()
+        self.assertEqual(len(at.exception), 0)
+        _btn(at, "Découper les 2 vidéos").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        names = {Path(Plan.model_validate_json(f.read_text()).sources[0].path).name
+                 for f in (self.r / "workspace" / "plans").iterdir()}
+        self.assertTrue({"s.mp4", "t.mp4"} <= names)

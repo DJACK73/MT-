@@ -143,27 +143,46 @@ def render_scan() -> None:
     lo = s1.number_input("Min (s)", 0.5, 60.0, 3.0, 0.5, key="scan_lo")
     hi = s2.number_input("Max (s)", 0.5, 120.0, 5.0, 0.5, key="scan_hi")
     st.caption("Les durées sont fixées à la découpe : changer Min/Max puis Découper crée un nouveau plan.")
-    if not st.button("Découper", type="primary"):
+    b1, b2, _ = st.columns([1, 1.4, 5])
+    one = b1.button("Découper", type="primary", use_container_width=True)
+    many = len(videos) > 1 and b2.button(f"Découper les {len(videos)} vidéos", use_container_width=True)
+    if not (one or many):
         return
     if hi < lo:
         st.error("Max doit être supérieur ou égal à Min")
         return
-    with st.spinner("Découpe en cours…"):
+    targets = videos if many else [st.session_state["scan_video"]]
+    opt = Options(min_scene_seconds=lo, max_scene_seconds=hi)
+    PLANS.mkdir(parents=True, exist_ok=True)
+    bar = st.progress(0.0, text="Découpe…")
+    made: list[int] = []
+    existed = 0
+    errors: list[str] = []
+    last: Path | None = None
+    for k, name in enumerate(targets, 1):
+        bar.progress((k - 1) / len(targets), text=f"Découpe {k}/{len(targets)} : {name}")
         try:
-            PLANS.mkdir(parents=True, exist_ok=True)
-            opt = Options(min_scene_seconds=lo, max_scene_seconds=hi)
-            plan = scan_video(ROOT / "inbox" / st.session_state["scan_video"], ROOT, opt, True)
+            plan = scan_video(ROOT / "inbox" / name, ROOT, opt, True)
             target = PLANS / f"{plan_id(plan)}.{plan.status}.json"
-            existed = target.exists()
-            new = target if existed else save_plan(plan, PLANS)
+            if target.exists():
+                existed += 1
+                last = target
+            else:
+                last = save_plan(plan, PLANS)
+                made.append(len(plan.scenes))
         except ERRORS as e:
-            st.error(str(e))
-            return
-    st.session_state["plan_path"] = str(new)
+            errors.append(f"{name}: {e}")
+    bar.empty()
+    if last is not None:
+        st.session_state["plan_path"] = str(last)
+    parts: list[str] = []
+    if made:
+        parts.append(f"{len(made)} plan(s) créé(s), {sum(made)} scènes (fenêtre {lo:g}–{hi:g} s)")
     if existed:
-        _flash("info", "Déjà découpé avec ces durées : plan rouvert")
-    else:
-        _flash("success", f"{len(plan.scenes)} scènes créées (fenêtre {lo:g}–{hi:g} s)")
+        parts.append(f"{existed} déjà découpé(s) avec ces durées : rouvert(s)")
+    if errors:
+        parts.append("erreurs : " + "; ".join(errors))
+    _flash("error" if errors else ("success" if made else "info"), " · ".join(parts))
     st.rerun()
 
 
@@ -319,6 +338,8 @@ def main() -> None:
     go_video = a3.button("Exporter la vidéo assemblée", type="primary" if approved and not dirty else "secondary",
                          disabled=not approved or dirty, use_container_width=True)
     go_clips = a4.button("Exporter en clips séparés", disabled=not approved or dirty, use_container_width=True)
+    if approved and not dirty:
+        st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
     if go_video:
         _export_video(plan)
     if go_clips:
