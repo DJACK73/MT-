@@ -2,7 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 import streamlit as st
 from pydantic import ValidationError
-from mt_agent.approval import PlanError, approve, is_approved, save_plan
+from mt_agent.approval import PlanError, approve, is_approved, plan_id, save_plan
 from mt_agent.cmd import scan_video
 from mt_agent.ffx import MediaError
 from mt_agent.export import export_clips, export_plan
@@ -18,7 +18,9 @@ from mt_agent.clean import plan_clean, run_clean, size_of
 PLANS = ROOT / "workspace" / "plans"
 ERRORS = (PlanError, ValidationError, ValueError, OSError, RuntimeError, MediaError)
 VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"}
-COLS = 6
+COLS = 5
+STATUS_FR = {"pending_human_review": "À valider", "approved": "Approuvé", "rendered": "Rendu"}
+CSS = "<style>.block-container{padding-top:1.5rem}[data-testid='stImage'] img{border-radius:6px}</style>"
 
 
 def load(p: Path) -> Plan:
@@ -48,18 +50,32 @@ def _switch(new: Path) -> None:
     _flash("success", f"plan écrit : {new.name}")
 
 
+def _flags(plan: Plan, pk: str) -> list[bool]:
+    return [bool(st.session_state.get(f"sel:{pk}:{i}", sc.selected)) for i, sc in enumerate(plan.scenes, 1)]
+
+
+def plan_label(p: str) -> str:
+    pl = load(Path(p))
+    stem = Path(pl.sources[0].path).stem if pl.sources else "?"
+    return f"{STATUS_FR[pl.status]} · {stem} · {sum(s.selected for s in pl.scenes)}/{len(pl.scenes)} scènes · {Path(p).name[:8]}"
+
+
 def on_select() -> None:
     path = Path(st.session_state["plan_path"])
     try:
         plan = load(path)
         spec = st.session_state.get("spec", "").strip()
         if not spec:
-            spec = spec_from_flags([bool(st.session_state.get(f"sel:{path.name}:{i}"))
-                                    for i in range(1, len(plan.scenes) + 1)])
+            spec = spec_from_flags(_flags(plan, path.name))
         if not spec:
             _flash("error", "Aucune scène cochée ni numéro saisi")
             return
-        _switch(save_plan(select_scenes(plan, spec), path.parent))
+        new = select_scenes(plan, spec)
+        if new.content_hash() == plan.content_hash():
+            st.session_state["spec"] = ""
+            _flash("info", "Sélection déjà enregistrée : rien à changer")
+            return
+        _switch(save_plan(new, path.parent))
         st.session_state["spec"] = ""
     except ERRORS as e:
         _flash("error", str(e))
@@ -92,7 +108,6 @@ def list_videos(d: Path) -> list[str]:
 
 
 def render_scan() -> None:
-    st.subheader("1. Découper une vidéo")
     videos = list_videos(ROOT / "inbox")
     if not videos:
         st.info("Aucune vidéo dans inbox/. Dépose-en via l'Explorateur, puis recharge la page.")
@@ -102,27 +117,41 @@ def render_scan() -> None:
     lo = s1.number_input("Min (s)", 0.5, 60.0, 3.0, 0.5, key="scan_lo")
     hi = s2.number_input("Max (s)", 0.5, 120.0, 5.0, 0.5, key="scan_hi")
     st.caption("Les durées sont fixées à la découpe : changer Min/Max puis Découper crée un nouveau plan.")
-    if st.button("Découper"):
-        if hi < lo:
-            st.error("Max doit être supérieur ou égal à Min")
+    if not st.button("Découper", type="primary"):
+        return
+    if hi < lo:
+        st.error("Max doit être supérieur ou égal à Min")
+        return
+    with st.spinner("Découpe en cours…"):
+        try:
+            PLANS.mkdir(parents=True, exist_ok=True)
+            opt = Options(min_scene_seconds=lo, max_scene_seconds=hi)
+            plan = scan_video(ROOT / "inbox" / st.session_state["scan_video"], ROOT, opt, True)
+            target = PLANS / f"{plan_id(plan)}.{plan.status}.json"
+            existed = target.exists()
+            new = target if existed else save_plan(plan, PLANS)
+        except ERRORS as e:
+            st.error(str(e))
             return
-        with st.spinner("Découpe en cours…"):
-            try:
-                PLANS.mkdir(parents=True, exist_ok=True)
-                opt = Options(min_scene_seconds=lo, max_scene_seconds=hi)
-                plan = scan_video(ROOT / "inbox" / st.session_state["scan_video"], ROOT, opt, True)
-                new = save_plan(plan, PLANS)
-            except ERRORS as e:
-                st.error(str(e))
-                return
-        _switch(new)
-        st.rerun()
+    st.session_state["plan_path"] = str(new)
+    if existed:
+        _flash("info", "Déjà découpé avec ces durées : plan rouvert")
+    else:
+        _flash("success", f"{len(plan.scenes)} scènes créées (fenêtre {lo:g}–{hi:g} s)")
+    st.rerun()
 
 
 def on_all(value: bool) -> None:
     path = Path(st.session_state["plan_path"])
     for i in range(1, len(load(path).scenes) + 1):
         st.session_state[f"sel:{path.name}:{i}"] = value
+
+
+def on_invert() -> None:
+    path = Path(st.session_state["plan_path"])
+    for i, sc in enumerate(load(path).scenes, 1):
+        k = f"sel:{path.name}:{i}"
+        st.session_state[k] = not bool(st.session_state.get(k, sc.selected))
 
 
 CLEAN_LABELS = {
@@ -154,39 +183,104 @@ def confirm_clean(level: int) -> None:
 
 
 def render_clean() -> None:
-    st.divider()
-    st.subheader("Nettoyage")
-    st.caption("À faire une fois les exports terminés. Confirmation demandée. workspace/archive-* n'est jamais touché.")
-    for lvl, col in zip((1, 2, 3), st.columns(3)):
-        if col.button(CLEAN_LABELS[lvl], key=f"clean_{lvl}"):
-            confirm_clean(lvl)
+    with st.expander("Nettoyage (à faire à la fin, après les exports)"):
+        st.caption("Confirmation demandée. workspace/archive-* n'est jamais touché.")
+        for lvl, col in zip((1, 2, 3), st.columns(3)):
+            if col.button(CLEAN_LABELS[lvl], key=f"clean_{lvl}", use_container_width=True):
+                confirm_clean(lvl)
+
+
+def _export_video(plan: Plan) -> None:
+    with st.spinner("Rendu de la vidéo en cours (plusieurs minutes possibles)…"):
+        try:
+            mp4, _ = export_plan(plan, ROOT, ROOT / "output")
+        except ERRORS as e:
+            st.error(str(e))
+            return
+    st.success(f"Vidéo prête : output/{mp4.name}")
+
+
+def _export_clips(plan: Plan) -> None:
+    bar = st.progress(0.0, text="Rendu des clips…")
+
+    def tick(k: int, n: int) -> None:
+        bar.progress(k / n, text=f"Clip {k}/{n}")
+
+    try:
+        files = export_clips(plan, ROOT, ROOT / "output", on_progress=tick)
+    except ERRORS as e:
+        bar.empty()
+        st.error(str(e))
+        return
+    bar.empty()
+    st.success(f"{len(files)} clips prêts : {files[0].parent.relative_to(ROOT)}")
 
 
 def main() -> None:
-    st.set_page_config(page_title="MT", layout="wide")
-    st.title("MT")
+    st.set_page_config(page_title="MT", page_icon="🎬", layout="wide")
+    st.markdown(CSS, unsafe_allow_html=True)
+    st.title("🎬 MT · Montage")
     flash = st.session_state.pop("flash", None)
     if flash:
         getattr(st, flash[0])(flash[1])
-    render_scan()
-    st.divider()
     plans = list_plans(PLANS)
+    with st.expander("① Découper une vidéo", expanded=not plans):
+        render_scan()
     if not plans:
-        st.info("Aucun plan. Découpe une vidéo ci-dessus.")
+        st.info("Aucun plan pour l'instant : découpe une vidéo ci-dessus.")
         render_clean()
         return
-    st.selectbox("Plan", plans, key="plan_path", format_func=lambda s: Path(s).name)
+    st.selectbox("② Plan à monter", plans, key="plan_path", format_func=plan_label)
     path = Path(st.session_state["plan_path"])
     plan = load(path)
+    pk = path.name
+    saved = [s.selected for s in plan.scenes]
+    flags = _flags(plan, pk)
+    spec = str(st.session_state.get("spec", "")).strip()
+    dirty = bool(spec) or flags != saved
+    pending = plan.status == "pending_human_review"
+    approved = is_approved(plan)
     kept = sum(s.end - s.start for s in plan.scenes if s.selected)
     c1, c2, c3 = st.columns(3)
-    c1.metric("Statut", plan.status)
-    c2.metric("Scènes", f"{sum(s.selected for s in plan.scenes)}/{len(plan.scenes)}")
+    c1.metric("Statut", STATUS_FR[plan.status])
+    c2.metric("Scènes", f"{sum(saved)}/{len(saved)}")
     c3.metric("Durée retenue", f"{kept:.1f} s")
+    if dirty:
+        st.warning("Sélection modifiée, pas encore enregistrée : clique « Appliquer la sélection ».")
+    elif plan.status == "rendered":
+        st.success("Plan déjà rendu.")
+    elif approved:
+        st.success("Approuvé : tu peux exporter.")
+    elif plan.status == "approved":
+        st.warning("Plan modifié depuis l'approbation : approbation invalide.")
+    elif not any(saved):
+        st.info("③ Coche les scènes à garder (ou saisis des numéros), puis « Appliquer la sélection ».")
+    else:
+        st.info("④ Sélection enregistrée : clique « Approuver » pour débloquer l'export.")
+    t1, t2, t3, t4 = st.columns([1, 1, 1, 3])
+    t1.button("Tout cocher", on_click=on_all, args=(True,), use_container_width=True)
+    t2.button("Tout décocher", on_click=on_all, args=(False,), use_container_width=True)
+    t3.button("Inverser", on_click=on_invert, use_container_width=True)
+    t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
+    a1, a2, a3, a4 = st.columns(4)
+    a1.button("Appliquer la sélection", on_click=on_select,
+              type="primary" if dirty else "secondary", use_container_width=True)
+    a2.button("Approuver", on_click=on_approve,
+              type="primary" if pending and not dirty and any(saved) else "secondary",
+              disabled=not pending or dirty or not any(saved), use_container_width=True)
+    go_video = a3.button("Exporter la vidéo assemblée", type="primary" if approved and not dirty else "secondary",
+                         disabled=not approved or dirty, use_container_width=True)
+    go_clips = a4.button("Exporter en clips séparés", disabled=not approved or dirty, use_container_width=True)
+    if go_video:
+        _export_video(plan)
+    if go_clips:
+        _export_clips(plan)
+    with st.expander("Sélection par numéros (avancé)"):
+        st.text_input("Sélection (ex. 1-5,8)", key="spec")
+        st.caption("Si ce champ est rempli, il remplace les cases cochées.")
     thumbs = make_thumbnails(plan, ROOT)
     if len(thumbs) != len(plan.scenes):
         st.warning(f"{len(thumbs)} vignettes pour {len(plan.scenes)} scènes")
-    pk = Path(st.session_state["plan_path"]).name
     lo = plan.options.min_scene_seconds
     mx = plan.options.max_scene_seconds
     hi = float("inf") if mx is None else mx
@@ -196,46 +290,16 @@ def main() -> None:
     else:
         st.caption(f"Plan découpé en fenêtre {lo:g}–{mx:g} s : {bad} scène(s) hors fenêtre. ▼ trop courte, ▲ trop longue.")
     cols = st.columns(COLS)
-    for i, (sc, t) in enumerate(zip(plan.scenes, thumbs), 1):
-        with cols[(i - 1) % COLS]:
+    for i, (sc, th) in enumerate(zip(plan.scenes, thumbs), 1):
+        with cols[(i - 1) % COLS], st.container(border=True):
             dur = sc.end - sc.start
-            st.image(str(t), caption=f"{i} · {dur:.2f}s {window_flag(dur, lo, hi)}".rstrip())
+            st.image(str(th), caption=f"{i} · {dur:.2f} s {window_flag(dur, lo, hi)}".rstrip())
             k = f"sel:{pk}:{i}"
             if k not in st.session_state:
                 st.session_state[k] = sc.selected
             st.checkbox("garder", key=k)
-            if st.button("▶ voir", key=f"v:{pk}:{i}"):
+            if st.button("▶ voir", key=f"v:{pk}:{i}", use_container_width=True):
                 show_clip(i)
-    flags = [bool(st.session_state.get(f"sel:{pk}:{i}")) for i in range(1, len(plan.scenes) + 1)]
-    st.caption(f"Cochées : {sum(flags)}/{len(flags)}")
-    b1, b2, _ = st.columns([1, 1, 6])
-    b1.button("Tout cocher", on_click=on_all, args=(True,))
-    b2.button("Tout décocher", on_click=on_all, args=(False,))
-    st.text_input("Sélection (ex. 1-5,8)", key="spec")
-    st.caption("Si ce champ est rempli, il remplace les cases cochées.")
-    st.button("Appliquer la sélection", on_click=on_select)
-    st.button("Approuver", on_click=on_approve, disabled=plan.status != "pending_human_review")
-    if st.button("Exporter", disabled=not is_approved(plan)):
-        with st.spinner("Rendu en cours…"):
-            try:
-                mp4, done = export_plan(plan, ROOT, ROOT / "output")
-            except ERRORS as e:
-                st.error(str(e))
-            else:
-                st.success(f"{mp4.name} · {done.name}")
-    if st.button("Exporter en clips séparés", disabled=not is_approved(plan)):
-        bar = st.progress(0.0, text="Rendu des clips…")
-
-        def _tick(k: int, n: int) -> None:
-            bar.progress(k / n, text=f"Clip {k}/{n}")
-
-        try:
-            files = export_clips(plan, ROOT, ROOT / "output", on_progress=_tick)
-        except ERRORS as e:
-            st.error(str(e))
-        else:
-            st.success(f"{len(files)} clips · {files[0].parent.relative_to(ROOT)}")
-
     render_clean()
 
 main()
