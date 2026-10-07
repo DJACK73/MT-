@@ -143,6 +143,13 @@ def render_scan() -> None:
     lo = s1.number_input("Min (s)", 0.5, 60.0, 3.0, 0.5, key="scan_lo")
     hi = s2.number_input("Max (s)", 0.5, 120.0, 5.0, 0.5, key="scan_hi")
     st.caption("Les durées sont fixées à la découpe : changer Min/Max puis Découper crée un nouveau plan.")
+
+    def _window(lo_: float, hi_: float) -> None:
+        st.session_state["scan_lo"], st.session_state["scan_hi"] = lo_, hi_
+
+    w1, w2, _ = st.columns([1, 1, 6])
+    w1.button("Fenêtre 3–4 s", on_click=_window, args=(3.0, 4.0), use_container_width=True)
+    w2.button("Fenêtre 3–5 s", on_click=_window, args=(3.0, 5.0), use_container_width=True)
     b1, b2, _ = st.columns([1, 1.4, 5])
     one = b1.button("Découper", type="primary", use_container_width=True)
     many = len(videos) > 1 and b2.button(f"Découper les {len(videos)} vidéos", use_container_width=True)

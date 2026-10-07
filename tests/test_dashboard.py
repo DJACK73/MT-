@@ -99,3 +99,16 @@ class Dashboard(unittest.TestCase):
         names = {Path(Plan.model_validate_json(f.read_text()).sources[0].path).name
                  for f in (self.r / "workspace" / "plans").iterdir()}
         self.assertTrue({"s.mp4", "t.mp4"} <= names)
+
+    def test_fenetres(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        _btn(at, "Fenêtre 3–4 s").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual((at.number_input(key="scan_lo").value, at.number_input(key="scan_hi").value), (3.0, 4.0))
+        _btn(at, "Découper").click().run()
+        self.assertEqual(len(at.exception), 0)
+        maxes = [Plan.model_validate_json(f.read_text()).options.max_scene_seconds
+                 for f in (self.r / "workspace" / "plans").iterdir()]
+        self.assertIn(4.0, maxes)
+        _btn(at, "Fenêtre 3–5 s").click().run()
+        self.assertEqual(at.number_input(key="scan_hi").value, 5.0)
