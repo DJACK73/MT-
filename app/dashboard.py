@@ -270,7 +270,7 @@ def main() -> None:
     if flash:
         getattr(st, flash[0])(flash[1])
     plans = list_plans(PLANS)
-    with st.expander("① Découper une vidéo", expanded=not plans):
+    with st.expander("① Découper une vidéo", expanded=True):
         render_scan()
     if not plans:
         st.info("Aucun plan pour l'instant : découpe une vidéo ci-dessus.")
@@ -323,7 +323,6 @@ def main() -> None:
         st.info("Coche les scènes à garder (ou saisis des numéros), puis « Appliquer la sélection ».")
     else:
         st.info("Sélection enregistrée : clique « Approuver » pour débloquer l'export.")
-    t1, t2, t3, t4 = st.columns([1, 1, 1, 3])
     t1, t2, t3, t4 = st.columns([1, 1, 1, 3])
     t1.button("Tout cocher", on_click=on_all, args=(True,), use_container_width=True)
     t2.button("Tout décocher", on_click=on_all, args=(False,), use_container_width=True)
