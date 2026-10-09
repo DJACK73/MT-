@@ -112,3 +112,19 @@ class Dashboard(unittest.TestCase):
         self.assertIn(4.0, maxes)
         _btn(at, "Fenêtre 3–5 s").click().run()
         self.assertEqual(at.number_input(key="scan_hi").value, 5.0)
+
+    def test_rendu_choisi(self) -> None:
+        from mt_agent.export import Look, export_clips
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        at.text_input(key="spec").set_value("1-2").run()
+        _btn(at, "Appliquer la sélection").click().run()
+        _btn(at, "Approuver").click().run()
+        at.radio(key="look_fit").set_value("Plein cadre (recadré)").run()
+        at.slider(key="look_pos").set_value(0).run()
+        with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
+            _btn(at, "Exporter en clips séparés").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        self.assertEqual(m.call_args.kwargs["look"], Look(fit="fill", background="blur", anchor=0.0))
+        self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
+

@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from mt_agent.approval import PlanError, approve, is_approved, plan_id, save_plan
 from mt_agent.cmd import scan_video
 from mt_agent.ffx import MediaError
-from mt_agent.export import export_clips, export_plan
+from mt_agent.export import Look, export_clips, export_plan
 from mt_agent.models import Options, Plan
 from mt_agent.paths import ROOT
 from mt_agent.selection import select_scenes
@@ -243,24 +243,24 @@ def render_clean() -> None:
                 confirm_clean(lvl)
 
 
-def _export_video(plan: Plan) -> None:
+def _export_video(plan: Plan, look: Look) -> None:
     with st.spinner("Rendu de la vidéo en cours (plusieurs minutes possibles)…"):
         try:
-            mp4, _ = export_plan(plan, ROOT, ROOT / "output")
+            mp4, _ = export_plan(plan, ROOT, ROOT / "output", look=look)
         except ERRORS as e:
             st.error(str(e))
             return
     st.success(f"Vidéo prête : output/{mp4.name}")
 
 
-def _export_clips(plan: Plan) -> None:
+def _export_clips(plan: Plan, look: Look) -> None:
     bar = st.progress(0.0, text="Rendu des clips…")
 
     def tick(k: int, n: int) -> None:
         bar.progress(k / n, text=f"Clip {k}/{n}")
 
     try:
-        files = export_clips(plan, ROOT, ROOT / "output", on_progress=tick)
+        files = export_clips(plan, ROOT, ROOT / "output", on_progress=tick, look=look)
     except ERRORS as e:
         bar.empty()
         st.error(str(e))
@@ -335,6 +335,13 @@ def main() -> None:
     t2.button("Tout décocher", on_click=on_all, args=(False,), use_container_width=True)
     t3.button("Inverser", on_click=on_invert, use_container_width=True)
     t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
+    r1, r2, r3 = st.columns([2, 1.2, 2])
+    fit = r1.radio("Cadrage 9:16", ["Bandes (image entière)", "Plein cadre (recadré)"], key="look_fit", horizontal=True)
+    full = fit.startswith("Plein")
+    bgc = r2.radio("Fond des bandes", ["Flou", "Noir"], key="look_bg", horizontal=True, disabled=full)
+    pos = r3.slider("Position du recadrage", 0, 100, 50, key="look_pos", disabled=not full,
+                    help="0 = bord gauche, 100 = bord droit. Valable pour toutes les scènes.")
+    look = Look(fit="fill" if full else "bars", background="black" if bgc == "Noir" else "blur", anchor=pos / 100)
     a1, a2, a3, a4 = st.columns(4)
     a1.button("Appliquer la sélection", on_click=on_select,
               type="primary" if dirty else "secondary", use_container_width=True)
@@ -347,9 +354,9 @@ def main() -> None:
     if approved and not dirty:
         st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
     if go_video:
-        _export_video(plan)
+        _export_video(plan, look)
     if go_clips:
-        _export_clips(plan)
+        _export_clips(plan, look)
     with st.expander("Sélection par numéros (avancé)"):
         st.text_input("Sélection (ex. 1-5,8)", key="spec")
         st.caption("Si ce champ est rempli, il remplace les cases cochées.")
