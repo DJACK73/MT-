@@ -16,7 +16,7 @@ _TAIL = "setsar=1,fps=25,format=yuv420p"
 @dataclass(frozen=True)
 class Look:
     """Rendu choisi à l'export : hors plan, donc hors hash et sans ré-approbation."""
-    fit: Literal["bars", "fill"] | None = None  # None = suit plan.options.framing
+    fit: Literal["bars", "fill", "none"] | None = None  # None = suit plan.options.framing
     background: Literal["blur", "black"] = "blur"  # fond des bandes (fit="bars")
     anchor: float = 0.5  # fit="fill" : 0 = bord gauche, 1 = bord droit
 
@@ -26,11 +26,15 @@ def _look(plan: Plan, look: Look | None) -> tuple[str, str, float]:
     if not 0.0 <= look.anchor <= 1.0:
         raise PlanError(f"position hors de 0..1: {look.anchor}")
     fit = look.fit or ("fill" if plan.options.framing == "crop_center" else "bars")
+    if fit == "none":  # source telle quelle
+        return "none", look.background, look.anchor
     return ("crop_center" if fit == "fill" else "blur_pad"), look.background, look.anchor
 
 def _node(i: int, j: int, s: float, e: float, framing: str, w: int, h: int,
           bg: str = "blur", cx: float = 0.5) -> str:
     head = f"[{j}:v]trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS"
+    if framing == "none":  # trim seul : ni scale, ni pad, ni flou, ni fps
+        return f"{head},format=yuv420p[v{i}]"
     pos = "" if cx == 0.5 else f":(iw-ow)*{cx:.3f}:(ih-oh)/2"
     fill = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{pos}"
     if framing == "crop_center":
@@ -59,6 +63,9 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
             order.append(sc.source_id)
     w, h = PROFILES[plan.options.profile]
     fr, bg, cx = _look(plan, look)
+    if fr == "none" and len(order) > 1:
+        raise PlanError("cadrage « Aucun » : export assemblé limité à une seule source "
+                        "(tailles possiblement différentes) ; utiliser les clips séparés")
     nodes = [_node(i, order.index(sc.source_id), sc.start, sc.end, fr, w, h, bg, cx)
              for i, sc in enumerate(chosen)]
     labels = "".join(f"[v{i}]" for i in range(len(chosen)))
