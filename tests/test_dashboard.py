@@ -128,3 +128,22 @@ class Dashboard(unittest.TestCase):
         self.assertEqual(m.call_args.kwargs["look"], Look(fit="fill", background="blur", anchor=0.0))
         self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
 
+    def test_rendu_aucun(self) -> None:
+        from mt_agent.export import Look, export_clips
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        at.text_input(key="spec").set_value("1-2").run()
+        _btn(at, "Appliquer la sélection").click().run()
+        _btn(at, "Approuver").click().run()
+        at.radio(key="look_fit").set_value("Aucun (source telle quelle)").run()
+        self.assertEqual([r.key for r in at.radio if r.key in ("look_bg", "look_pos")], [])
+        self.assertEqual([x.key for x in at.slider if x.key == "look_pos"], [])
+        with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
+            _btn(at, "Exporter en clips séparés").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        self.assertEqual(m.call_args.kwargs["look"], Look(fit="none", background="blur", anchor=0.5))
+        self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
+        _btn(at, "Exporter la vidéo assemblée").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        self.assertEqual(len(list(self.out.glob("*.mp4"))), 1)

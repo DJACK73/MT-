@@ -277,7 +277,7 @@ def main() -> None:
     if flash:
         getattr(st, flash[0])(flash[1])
     plans = list_plans(PLANS)
-    with st.expander("① Découper une vidéo", expanded=True):
+    with st.expander("① Découper une vidéo", expanded=not plans):
         render_scan()
     if not plans:
         st.info("Aucun plan pour l'instant : découpe une vidéo ci-dessus.")
@@ -335,13 +335,19 @@ def main() -> None:
     t2.button("Tout décocher", on_click=on_all, args=(False,), use_container_width=True)
     t3.button("Inverser", on_click=on_invert, use_container_width=True)
     t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
-    r1, r2, r3 = st.columns([2, 1.2, 2])
-    fit = r1.radio("Cadrage 9:16", ["Bandes (image entière)", "Plein cadre (recadré)"], key="look_fit", horizontal=True)
-    full = fit.startswith("Plein")
-    bgc = r2.radio("Fond des bandes", ["Flou", "Noir"], key="look_bg", horizontal=True, disabled=full)
-    pos = r3.slider("Position du recadrage", 0, 100, 50, key="look_pos", disabled=not full,
-                    help="0 = bord gauche, 100 = bord droit. Valable pour toutes les scènes.")
-    look = Look(fit="fill" if full else "bars", background="black" if bgc == "Noir" else "blur", anchor=pos / 100)
+    fit = st.radio("Cadrage 9:16", ["Bandes (image entière)", "Plein cadre (recadré)", "Aucun (source telle quelle)"],
+                   key="look_fit", horizontal=True)
+    full, none = fit.startswith("Plein"), fit.startswith("Aucun")
+    bgc, pos = "Flou", 50
+    if not full and not none:  # réglage affiché seulement s'il sert
+        bgc = st.radio("Fond des bandes", ["Flou", "Noir"], key="look_bg", horizontal=True)
+    if full:
+        pos = st.slider("Position du recadrage", 0, 100, 50, key="look_pos",
+                        help="0 = bord gauche, 100 = bord droit. Valable pour toutes les scènes.")
+    if none:
+        st.caption("Source telle quelle : ni recadrage, ni fond, ni redimensionnement. Assemblé : une seule source.")
+    look = Look(fit="none" if none else "fill" if full else "bars",
+                background="black" if bgc == "Noir" else "blur", anchor=pos / 100)
     a1, a2, a3, a4 = st.columns(4)
     a1.button("Appliquer la sélection", on_click=on_select,
               type="primary" if dirty else "secondary", use_container_width=True)
