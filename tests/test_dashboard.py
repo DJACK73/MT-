@@ -147,3 +147,36 @@ class Dashboard(unittest.TestCase):
         self.assertEqual(len(at.exception), 0)
         self.assertEqual(len(at.error), 0)
         self.assertEqual(len(list(self.out.glob("*.mp4"))), 1)
+
+    def _scenes(self) -> list[list[tuple[float, float]]]:
+        return [[(x.start, x.end) for x in Plan.model_validate_json(f.read_text()).scenes]
+                for f in (self.r / "workspace" / "plans").iterdir()]
+
+    def test_mode_manuel(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        at.radio(key="scan_mode").set_value("Manuel (plages)").run()
+        self.assertEqual(len(at.number_input), 0)  # Min/Max masqués hors Auto
+        at.text_area(key="scan_spans").set_value("4-9;1-2.5").run()
+        _btn(at, "Créer le plan").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        self.assertIn([(4.0, 9.0), (1.0, 2.5)], self._scenes())
+
+    def test_mode_manuel_invalide(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        at.radio(key="scan_mode").set_value("Manuel (plages)").run()
+        at.text_area(key="scan_spans").set_value("9-4").run()
+        _btn(at, "Créer le plan").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(self._scenes()), 1)  # aucun plan ajouté
+
+    def test_mode_aucune(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        at.radio(key="scan_mode").set_value("Aucune (vidéo entière)").run()
+        _btn(at, "Garder la vidéo entière").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        whole = [sc for sc in self._scenes() if len(sc) == 1]
+        self.assertEqual(len(whole), 1)
+        self.assertEqual(whole[0][0][0], 0.0)
+        self.assertAlmostEqual(whole[0][0][1], 10.0, delta=0.2)

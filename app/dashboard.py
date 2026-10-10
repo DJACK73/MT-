@@ -4,6 +4,7 @@ import streamlit as st
 from pydantic import ValidationError
 from mt_agent.approval import PlanError, approve, is_approved, plan_id, save_plan
 from mt_agent.cmd import scan_video
+from mt_agent.manual import manual_plan
 from mt_agent.ffx import MediaError
 from mt_agent.export import Look, export_clips, export_plan
 from mt_agent.models import Options, Plan
@@ -133,33 +134,48 @@ def list_videos(d: Path) -> list[str]:
     return sorted(x.name for x in d.iterdir() if x.is_file() and x.suffix.lower() in VIDEO_EXT)
 
 
+MODES = ["Auto (scènes)", "Manuel (plages)", "Aucune (vidéo entière)"]
+
+
 def render_scan() -> None:
     videos = list_videos(ROOT / "inbox")
     if not videos:
         st.info("Aucune vidéo dans inbox/. Dépose-en via l'Explorateur, puis recharge la page.")
         return
+    mode = st.radio("Mode de découpe", MODES, key="scan_mode", horizontal=True)
+    auto, manual = mode.startswith("Auto"), mode.startswith("Manuel")
     st.selectbox("Vidéo (inbox/)", videos, key="scan_video")
-    s1, s2, _ = st.columns([1, 1, 6])
-    lo = s1.number_input("Min (s)", 0.5, 60.0, 3.0, 0.5, key="scan_lo")
-    hi = s2.number_input("Max (s)", 0.5, 120.0, 5.0, 0.5, key="scan_hi")
-    st.caption("Les durées sont fixées à la découpe : changer Min/Max puis Découper crée un nouveau plan.")
+    lo, hi, text = 3.0, 5.0, ""
+    if auto:  # Min/Max et préréglages : visibles seulement s'ils servent
+        s1, s2, _ = st.columns([1, 1, 6])
+        lo = s1.number_input("Min (s)", 0.5, 60.0, 3.0, 0.5, key="scan_lo")
+        hi = s2.number_input("Max (s)", 0.5, 120.0, 5.0, 0.5, key="scan_hi")
+        st.caption("Les durées sont fixées à la découpe : changer Min/Max puis Découper crée un nouveau plan.")
 
-    def _window(lo_: float, hi_: float) -> None:
-        st.session_state["scan_lo"], st.session_state["scan_hi"] = lo_, hi_
+        def _window(lo_: float, hi_: float) -> None:
+            st.session_state["scan_lo"], st.session_state["scan_hi"] = lo_, hi_
 
-    w1, w2, _ = st.columns([1, 1, 6])
-    w1.button("Fenêtre 3–4 s", on_click=_window, args=(3.0, 4.0), use_container_width=True)
-    w2.button("Fenêtre 3–5 s", on_click=_window, args=(3.0, 5.0), use_container_width=True)
+        w1, w2, _ = st.columns([1, 1, 6])
+        w1.button("Fenêtre 3–4 s", on_click=_window, args=(3.0, 4.0), use_container_width=True)
+        w2.button("Fenêtre 3–5 s", on_click=_window, args=(3.0, 5.0), use_container_width=True)
+    elif manual:
+        text = st.text_area("Plages (une par ligne : début-fin)", key="scan_spans", height=120)
+        st.caption("Ex. 12.5-16 · 1:02-1:08.5 · 40-fin. Secondes ou m:ss ; une plage par ligne ou séparées par « ; ». "
+                   "L'ordre saisi est conservé.")
+    else:
+        st.caption("Une seule scène : la vidéo entière, sans coupe.")
     b1, b2, _ = st.columns([1, 1.4, 5])
-    one = b1.button("Découper", type="primary", use_container_width=True)
-    many = len(videos) > 1 and b2.button(f"Découper les {len(videos)} vidéos", use_container_width=True)
+    one = b1.button("Découper" if auto else "Créer le plan" if manual else "Garder la vidéo entière",
+                    type="primary", use_container_width=True)
+    batch_label = f"Découper les {len(videos)} vidéos" if auto else f"Garder les {len(videos)} vidéos entières"
+    many = len(videos) > 1 and not manual and b2.button(batch_label, use_container_width=True)
     if not (one or many):
         return
-    if hi < lo:
+    if auto and hi < lo:
         st.error("Max doit être supérieur ou égal à Min")
         return
     targets = videos if many else [st.session_state["scan_video"]]
-    opt = Options(min_scene_seconds=lo, max_scene_seconds=hi)
+    opt = Options(min_scene_seconds=lo, max_scene_seconds=hi) if auto else None
     PLANS.mkdir(parents=True, exist_ok=True)
     bar = st.progress(0.0, text="Découpe…")
     made: list[int] = []
@@ -169,7 +185,11 @@ def render_scan() -> None:
     for k, name in enumerate(targets, 1):
         bar.progress((k - 1) / len(targets), text=f"Découpe {k}/{len(targets)} : {name}")
         try:
-            plan = scan_video(ROOT / "inbox" / name, ROOT, opt, True)
+            video = ROOT / "inbox" / name
+            if opt is not None:
+                plan = scan_video(video, ROOT, opt, True)
+            else:
+                plan = manual_plan(video, ROOT, text if manual else None)
             target = PLANS / f"{plan_id(plan)}.{plan.status}.json"
             if target.exists():
                 existed += 1
@@ -184,9 +204,10 @@ def render_scan() -> None:
         st.session_state["plan_path"] = str(last)
     parts: list[str] = []
     if made:
-        parts.append(f"{len(made)} plan(s) créé(s), {sum(made)} scènes (fenêtre {lo:g}–{hi:g} s)")
+        tag = f" (fenêtre {lo:g}–{hi:g} s)" if auto else ""
+        parts.append(f"{len(made)} plan(s) créé(s), {sum(made)} scènes{tag}")
     if existed:
-        parts.append(f"{existed} déjà découpé(s) avec ces durées : rouvert(s)")
+        parts.append(f"{existed} plan(s) identique(s) déjà présent(s) : rouvert(s)")
     if errors:
         parts.append("erreurs : " + "; ".join(errors))
     _flash("error" if errors else ("success" if made else "info"), " · ".join(parts))
