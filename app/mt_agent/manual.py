@@ -6,6 +6,7 @@ from .approval import PlanError
 from .ffx import duration
 from .models import Options, Plan, Scene, Source
 
+MANUAL_MIN = 0.1  # valeur interne des plans manuels / vidéo entière
 _NUM = re.compile(r"^\d+(\.\d+)?$")
 _SEP = re.compile(r"\s*[-–→]\s*")
 _LINES = re.compile(r"[\n;]+|\s*,\s+|\s+,\s*")  # virgule séparatrice seulement si espacée : « 12,5 » reste un décimal
@@ -52,7 +53,7 @@ def whole_spans(total: float) -> list[tuple[float, float]]:
 
 def plan_from_spans(rel_path: str, total: float, spans: list[tuple[float, float]],
                     select_all: bool = True) -> Plan:
-    return Plan(options=Options(min_scene_seconds=0.1),
+    return Plan(options=Options(min_scene_seconds=MANUAL_MIN),
                 sources=[Source(id="s0", path=rel_path, duration=total)],
                 scenes=[Scene(source_id="s0", start=a, end=b, selected=select_all) for a, b in spans])
 

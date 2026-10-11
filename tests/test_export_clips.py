@@ -43,10 +43,13 @@ class ExportClipsTest(unittest.TestCase):
         for f in files:
             self.assertAlmostEqual(duration(str(f)), 1.5, delta=0.15)
 
-    def test_refus_ecraser(self) -> None:
-        export_clips(self.plan, self.root, self.out)
-        with self.assertRaises(PlanError):
-            export_clips(self.plan, self.root, self.out)
+    def test_pas_d_ecrasement(self) -> None:
+        a = export_clips(self.plan, self.root, self.out)
+        before = {f.name: f.stat().st_mtime_ns for f in a}
+        b = export_clips(self.plan, self.root, self.out)
+        self.assertEqual(b[0].parent.name, a[0].parent.name + "-2")
+        self.assertEqual({f.name: f.stat().st_mtime_ns for f in a}, before)  # 1er dossier intact
+        self.assertEqual([f.name for f in b], [f.name for f in a])
 
     def test_refus_non_approuve(self) -> None:
         pending = self.plan.model_copy(update={"status": "pending_human_review"})

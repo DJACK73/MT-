@@ -4,7 +4,7 @@ import streamlit as st
 from pydantic import ValidationError
 from mt_agent.approval import PlanError, approve, is_approved, plan_id, save_plan
 from mt_agent.cmd import scan_video
-from mt_agent.manual import manual_plan
+from mt_agent.manual import MANUAL_MIN, manual_plan
 from mt_agent.ffx import MediaError
 from mt_agent.export import Look, export_clips, export_plan
 from mt_agent.models import Options, Plan
@@ -378,7 +378,7 @@ def main() -> None:
     go_video = a3.button("Exporter la vidéo assemblée", type="primary" if approved and not dirty else "secondary",
                          disabled=not approved or dirty, use_container_width=True)
     go_clips = a4.button("Exporter en clips séparés", disabled=not approved or dirty, use_container_width=True)
-    if approved and not dirty:
+    if approved and not dirty and not none:
         st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
     if go_video:
         _export_video(plan, look)
@@ -390,7 +390,9 @@ def main() -> None:
     thumbs = make_thumbnails(plan, ROOT)
     if len(thumbs) != len(plan.scenes):
         st.warning(f"{len(thumbs)} vignettes pour {len(plan.scenes)} scènes")
-    if mx is None:
+    if mx is None and lo == MANUAL_MIN:
+        st.caption("Plan manuel ou vidéo entière : durées libres.")
+    elif mx is None:
         st.caption(f"Plan découpé avec min {lo:g} s, sans max.")
     else:
         st.caption(f"Plan découpé en fenêtre {lo:g}–{mx:g} s : {bad} scène(s) hors fenêtre. ▼ trop courte, ▲ trop longue.")

@@ -116,11 +116,17 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     w, h = PROFILES[plan.options.profile]
     fr, bg, cx = _look(plan, look)
     stem = Path(paths[chosen[0][1].source_id]).stem
-    folder = out_dir / "clips" / f"{stem}-{plan_id(plan)[:8]}"
-    try:
-        folder.mkdir(parents=True, exist_ok=False)
-    except FileExistsError as e:
-        raise PlanError(f"dossier déjà présent: {folder}") from e
+    base = f"{stem}-{plan_id(plan)[:8]}"
+    folder = out_dir / "clips" / base
+    for k in range(1, 100):  # dossier déjà présent : suffixe -2, -3… (rien n'est écrasé)
+        folder = out_dir / "clips" / (base if k == 1 else f"{base}-{k}")
+        try:
+            folder.mkdir(parents=True, exist_ok=False)
+            break
+        except FileExistsError:
+            continue
+    else:
+        raise PlanError(f"trop de dossiers existants: {out_dir / 'clips' / base}")
     done: list[Path] = []
     for k, (n, sc) in enumerate(chosen, 1):
         d = sc.end - sc.start
