@@ -3,6 +3,7 @@ services:
     build: .
     volumes:
       - ./inbox:/app/inbox:ro
+      - ./music:/app/music:ro
       - ./workspace:/app/workspace
       - ./projects:/app/projects
       - ./output:/app/output
@@ -17,5 +18,6 @@ services:
       - "127.0.0.1:8502:8501"
     volumes:
       - ./inbox:/app/inbox:ro
+      - ./music:/app/music:ro
       - ./workspace:/app/workspace
       - ./output:/app/output

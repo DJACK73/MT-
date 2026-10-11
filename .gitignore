@@ -6,3 +6,4 @@ workspace/
 *.sqlite
 __pycache__/
 *.pyc
+music/
