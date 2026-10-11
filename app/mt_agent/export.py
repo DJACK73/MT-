@@ -25,6 +25,10 @@ class Look:
     music_start: float = 0.0  # début dans le morceau (s)
     music_db: float = 0.0
     music_fade: float = 0.3  # fondu d'entrée et de sortie (s), 0..0.5
+    mirror: bool = False  # image inversée gauche/droite (hflip)
+    echo: bool = False  # écho sur l'audio final (exige un mode audio)
+    echo_ms: float = 120.0  # retard de l'écho (ms), 20..1000
+    echo_decay: float = 0.3  # niveau de l'écho, 0..0.7
 
 
 def _look(plan: Plan, look: Look | None) -> tuple[str, str, float]:
@@ -91,6 +95,20 @@ def _duck(src: str, mus: str, out: str) -> str:
             f"[{out}d][{src}2]amix=inputs=2:duration=first:normalize=0[{out}]")
 
 
+def _echo(look: Look | None) -> str:
+    """Filtre aecho, ou "" si inactif. Exige un mode audio."""
+    look = look or Look()
+    if not look.echo:
+        return ""
+    if look.audio == "none":
+        raise PlanError("écho : choisir d'abord un mode audio")
+    if not 20.0 <= look.echo_ms <= 1000.0:
+        raise PlanError(f"retard de l'écho hors de 20..1000 ms: {look.echo_ms}")
+    if not 0.0 < look.echo_decay <= 0.7:
+        raise PlanError(f"niveau de l'écho hors de 0..0.7: {look.echo_decay}")
+    return f"aecho=0.8:0.9:{look.echo_ms:g}:{look.echo_decay:g}"
+
+
 def _afilter(d: float, db: float = 0.0) -> str:
     f = min(_FADE, d / 2)
     vol = f"volume={db:g}dB," if db else ""
@@ -103,8 +121,9 @@ def _anode(i: int, j: int, s: float, e: float) -> str:
 
 
 def _node(i: int, j: int, s: float, e: float, framing: str, w: int, h: int,
-          bg: str = "blur", cx: float = 0.5) -> str:
-    head = f"[{j}:v]trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS"
+          bg: str = "blur", cx: float = 0.5, mirror: bool = False) -> str:
+    flip = ",hflip" if mirror else ""
+    head = f"[{j}:v]trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS{flip}"
     if framing == "none":  # trim seul : ni scale, ni pad, ni flou, ni fps
         return f"{head},format=yuv420p[v{i}]"
     pos = "" if cx == 0.5 else f":(iw-ow)*{cx:.3f}:(ih-oh)/2"
@@ -138,7 +157,8 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
     if fr == "none" and len(order) > 1:
         raise PlanError("cadrage « Aucun » : export assemblé limité à une seule source "
                         "(tailles possiblement différentes) ; utiliser les clips séparés")
-    nodes = [_node(i, order.index(sc.source_id), sc.start, sc.end, fr, w, h, bg, cx)
+    nodes = [_node(i, order.index(sc.source_id), sc.start, sc.end, fr, w, h, bg, cx,
+                   bool(look and look.mirror))
              for i, sc in enumerate(chosen)]
     with_a, db = _audio(look)
     use_m, mpath, mstart, mdb, mfade = _music(look)
@@ -146,6 +166,8 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
     srcs = [paths[k] for k in order]
     total = sum(sc.end - sc.start for sc in chosen)
     mix = with_a and use_m
+    ech = _echo(look)
+    fin = "aud0" if ech else "aud"
     if not with_a:
         labels = "".join(f"[v{i}]" for i in range(n))
         parts = [*nodes, f"{labels}concat=n={n}:v=1:a=0[out]"]
@@ -154,12 +176,14 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
         labels = "".join(f"[v{i}][a{i}]" for i in range(n))
         gain = f"volume={db:g}dB" if db else "anull"
         parts = [*nodes, *anodes, f"{labels}concat=n={n}:v=1:a=1[out][ac]",
-                 f"[ac]{gain}[{'src' if mix else 'aud'}]"]
+                 f"[ac]{gain}[{'src' if mix else fin}]"]
     if use_m:
-        parts.append(_mchain(len(srcs), total, mstart, mdb, mfade, "mus" if mix else "aud"))
+        parts.append(_mchain(len(srcs), total, mstart, mdb, mfade, "mus" if mix else fin))
         if mix:
-            parts.append(_duck("src", "mus", "aud"))
+            parts.append(_duck("src", "mus", fin))
         srcs.append(mpath)  # la musique est la dernière entrée
+    if ech:
+        parts.append(f"[aud0]{ech}[aud]")
     return srcs, ";".join(parts)
 
 def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
@@ -224,6 +248,8 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     fr, bg, cx = _look(plan, look)
     with_a, db = _audio(look)
     use_m, mpath, mstart, mdb, mfade = _music(look)
+    ech = _echo(look)
+    fin = "aud0" if ech else "aud"
     mfile = Path(mpath) if Path(mpath).is_absolute() else root / mpath
     sound: dict[str, bool] = {}
     if use_m:
@@ -243,22 +269,24 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     done: list[Path] = []
     for k, (n, sc) in enumerate(chosen, 1):
         d = sc.end - sc.start
-        node = _node(0, 0, 0.0, d, fr, w, h, bg, cx)
+        node = _node(0, 0, 0.0, d, fr, w, h, bg, cx, bool(look and look.mirror))
         args = ["-ss", f"{sc.start:.3f}", "-t", f"{d:.3f}", "-i", str(srcs[sc.source_id]),
                 "-filter_complex", node, "-map", "[v0]"]
         if use_m:  # musique : 2e entrée bouclée, coupée net à la durée du clip
             if sc.source_id not in sound:
                 sound[sc.source_id] = has_audio(str(srcs[sc.source_id]))
             mix = with_a and sound[sc.source_id]  # source sans piste => musique seule
-            fcx = node + ";" + _mchain(1, d, mstart, mdb, mfade, "mus" if mix else "aud")
+            fcx = node + ";" + _mchain(1, d, mstart, mdb, mfade, "mus" if mix else fin)
             if mix:
                 fcx += (";[0:a]aformat=sample_rates=48000:channel_layouts=stereo,"
-                        f"{_afilter(d, db)}[src];" + _duck("src", "mus", "aud"))
+                        f"{_afilter(d, db)}[src];" + _duck("src", "mus", fin))
+            if ech:
+                fcx += f";[aud0]{ech}[aud]"
             i = args.index("-filter_complex")
             args[i:i + 2] = ["-stream_loop", "-1", "-i", str(mfile), "-filter_complex", fcx]
             args += ["-map", "[aud]", "-c:a", "aac", "-b:a", "192k", "-t", f"{d:.3f}"]
         elif with_a:  # "?" : source sans piste audio => clip muet, pas d'erreur
-            args += ["-map", "0:a:0?", "-af", _afilter(d, db), "-c:a", "aac", "-b:a", "192k"]
+            args += ["-map", "0:a:0?", "-af", _afilter(d, db) + (f",{ech}" if ech else ""), "-c:a", "aac", "-b:a", "192k"]
         args += ["-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast", "-movflags", "+faststart"]
         dest = folder / f"{n:03d}.mp4"
         run_ffmpeg(args, dest)
