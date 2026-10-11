@@ -17,6 +17,9 @@ def _btn(at, label: str):
 def _metric(at, label: str) -> str:
     return next(m.value for m in at.metric if m.label == label)
 
+def _cases(at) -> list:
+    return [c for c in at.checkbox if str(c.key).startswith("sel:")]
+
 @unittest.skipIf(AppTest is None, "streamlit absent")
 class Dashboard(unittest.TestCase):
     def setUp(self) -> None:
@@ -54,17 +57,17 @@ class Dashboard(unittest.TestCase):
 
     def test_cases(self) -> None:
         at = AppTest.from_file(str(APP), default_timeout=60).run()
-        self.assertEqual(len(at.checkbox), 3)
-        at.checkbox[0].check().run()
-        at.checkbox[2].check().run()
+        self.assertEqual(len(_cases(at)), 3)
+        _cases(at)[0].check().run()
+        _cases(at)[2].check().run()
         _btn(at, "Appliquer la sélection").click().run()
         self.assertEqual(len(at.exception), 0)
         self.assertEqual(_metric(at, "Scènes"), "2/3")
-        self.assertEqual([c.value for c in at.checkbox], [True, False, True])
+        self.assertEqual([c.value for c in _cases(at)], [True, False, True])
         _btn(at, "Tout cocher").click().run()
-        self.assertEqual([c.value for c in at.checkbox], [True, True, True])
+        self.assertEqual([c.value for c in _cases(at)], [True, True, True])
         _btn(at, "Tout décocher").click().run()
-        self.assertEqual([c.value for c in at.checkbox], [False, False, False])
+        self.assertEqual([c.value for c in _cases(at)], [False, False, False])
 
     def test_decouper(self) -> None:
         at = AppTest.from_file(str(APP), default_timeout=120).run()
@@ -147,6 +150,108 @@ class Dashboard(unittest.TestCase):
         self.assertEqual(len(at.exception), 0)
         self.assertEqual(len(at.error), 0)
         self.assertEqual(len(list(self.out.glob("*.mp4"))), 1)
+
+    def _ready(self, at) -> None:
+        at.text_input(key="spec").set_value("1-2").run()
+        _btn(at, "Appliquer la sélection").click().run()
+        _btn(at, "Approuver").click().run()
+
+    def _keys(self, at, kind: str, pre: str) -> list[str]:
+        return [str(x.key) for x in getattr(at, kind) if str(x.key).startswith(pre)]
+
+    def _ff(self, *args: str) -> None:
+        import subprocess
+        subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True)
+
+    def _tone(self) -> None:
+        (self.r / "music").mkdir(exist_ok=True)
+        self._ff("-f", "lavfi", "-i", "sine=frequency=220:duration=2", str(self.r / "music" / "m.wav"))
+
+    def _with_audio(self) -> None:
+        p = self.r / "inbox" / "s.mp4"
+        p.unlink()
+        self._ff("-f", "lavfi", "-i", "color=c=red:s=320x240:d=10:r=25", "-f", "lavfi",
+                 "-i", "sine=frequency=440:duration=10", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(p))
+
+    def test_son_source_muette(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=60).run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(at.radio(key="snd_mode").options, ["Sans audio", "Musique ajoutée"])
+        for kind in ("slider", "selectbox", "checkbox", "number_input"):
+            self.assertEqual(self._keys(at, kind, "snd_"), [], kind)
+        at.radio(key="snd_mode").set_value("Musique ajoutée").run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(self._keys(at, "checkbox", "snd_"), ["snd_echo"])  # pas de mix : source muette
+        self.assertEqual(sorted(self._keys(at, "slider", "snd_")), ["snd_fade", "snd_mdb"])
+        self.assertEqual(self._keys(at, "selectbox", "snd_"), [])  # music/ absent ou vide
+
+    def test_son_musique_echo_export(self) -> None:
+        from mt_agent.export import Look, export_clips
+        from mt_agent.ffx import has_audio
+        self._tone()
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        self._ready(at)
+        at.radio(key="snd_mode").set_value("Musique ajoutée").run()
+        self.assertEqual(at.selectbox(key="snd_file").options, ["m.wav"])
+        self.assertEqual(self._keys(at, "slider", "snd_e"), [])  # écho masqué tant que décoché
+        at.checkbox(key="snd_echo").check().run()
+        self.assertEqual(sorted(self._keys(at, "slider", "snd_e")), ["snd_edec", "snd_ems"])
+        with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
+            _btn(at, "Exporter en clips séparés").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        self.assertEqual(m.call_args.kwargs["look"], Look(
+            fit="bars", background="blur", anchor=0.5, audio="music", music="music/m.wav",
+            echo=True, echo_ms=120.0, echo_decay=0.3))
+        files = sorted(self.out.glob("clips/*/*.mp4"))
+        self.assertEqual(len(files), 2)
+        self.assertTrue(all(has_audio(str(f)) for f in files))
+
+    def test_son_source_audio(self) -> None:
+        from mt_agent.export import Look, export_clips
+        from mt_agent.ffx import has_audio
+        self._with_audio()
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        self._ready(at)
+        self.assertEqual(at.radio(key="snd_mode").options, ["Sans audio", "Audio de la source", "Musique ajoutée"])
+        self.assertEqual(self._keys(at, "slider", "snd_"), [])
+        at.radio(key="snd_mode").set_value("Audio de la source").run()
+        self.assertEqual(self._keys(at, "slider", "snd_"), ["snd_src_db"])
+        self.assertEqual(self._keys(at, "checkbox", "snd_"), ["snd_echo"])  # pas de mix hors musique
+        at.radio(key="snd_mode").set_value("Musique ajoutée").run()
+        self.assertEqual(sorted(self._keys(at, "checkbox", "snd_")), ["snd_echo", "snd_mix"])
+        at.radio(key="snd_mode").set_value("Audio de la source").run()
+        with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
+            _btn(at, "Exporter en clips séparés").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        self.assertEqual(m.call_args.kwargs["look"], Look(
+            fit="bars", background="blur", anchor=0.5, audio="source", audio_db=0.0))
+        files = sorted(self.out.glob("clips/*/*.mp4"))
+        self.assertEqual(len(files), 2)
+        self.assertTrue(all(has_audio(str(f)) for f in files))
+
+    def test_format_miroir(self) -> None:
+        from mt_agent.export import Look, export_clips
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        self._ready(at)
+        self.assertEqual(at.radio(key="look_ratio").options, ["Suivre le plan", "9:16", "16:9", "1:1"])
+        at.radio(key="look_ratio").set_value("16:9").run()
+        at.checkbox(key="look_mirror").check().run()
+        with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
+            _btn(at, "Exporter en clips séparés").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        self.assertEqual(m.call_args.kwargs["look"], Look(
+            fit="bars", background="blur", anchor=0.5, ratio="16:9", mirror=True))
+        self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
+
+    def test_aucun_masque_format(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=60).run()
+        at.radio(key="look_fit").set_value("Aucun (source telle quelle)").run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual([r.key for r in at.radio if r.key == "look_ratio"], [])
+        self.assertEqual(self._keys(at, "checkbox", "look_"), ["look_mirror"])
 
     def _scenes(self) -> list[list[tuple[float, float]]]:
         return [[(x.start, x.end) for x in Plan.model_validate_json(f.read_text()).scenes]

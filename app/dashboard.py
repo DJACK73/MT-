@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from mt_agent.approval import PlanError, approve, is_approved, plan_id, save_plan
 from mt_agent.cmd import scan_video
 from mt_agent.manual import MANUAL_MIN, manual_plan
-from mt_agent.ffx import MediaError
+from mt_agent.ffx import MediaError, has_audio
 from mt_agent.export import Look, export_clips, export_plan
 from mt_agent.models import Options, Plan
 from mt_agent.paths import ROOT
@@ -290,6 +290,87 @@ def _export_clips(plan: Plan, look: Look) -> None:
     st.success(f"{len(files)} clips prêts : {files[0].parent.relative_to(ROOT)}")
 
 
+MUSIC_DIR = ROOT / "music"
+AUDIO_EXT = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"}
+FORMATS = ["Suivre le plan", "9:16", "16:9", "1:1"]
+
+
+def list_music(d: Path) -> list[str]:
+    if not d.is_dir():
+        return []
+    return sorted(x.name for x in d.iterdir() if x.is_file() and x.suffix.lower() in AUDIO_EXT)
+
+
+@st.cache_data(show_spinner=False)
+def _src_audio(path: str) -> bool:
+    return has_audio(path)
+
+
+def source_has_audio(plan: Plan) -> bool:
+    used = {sc.source_id for sc in plan.scenes if sc.selected}
+    paths = [Path(x.path) if Path(x.path).is_absolute() else ROOT / x.path for x in plan.sources if x.id in used]
+    return bool(paths) and all(_src_audio(str(q)) for q in paths)
+
+
+def render_frame() -> tuple[dict, bool]:
+    """Cadrage, fond, position, format, miroir : chaque réglage seulement s'il sert. Retourne (kwargs de Look, cadrage Aucun)."""
+    fit = st.radio("Cadrage", ["Bandes (image entière)", "Plein cadre (recadré)", "Aucun (source telle quelle)"],
+                   key="look_fit", horizontal=True)
+    full, none = fit.startswith("Plein"), fit.startswith("Aucun")
+    kw: dict = {"fit": "none" if none else "fill" if full else "bars"}
+    if not full and not none:
+        bg = st.radio("Fond des bandes", ["Flou", "Noir"], key="look_bg", horizontal=True)
+        kw["background"] = "black" if bg == "Noir" else "blur"
+    if full:
+        kw["anchor"] = st.slider("Position du recadrage", 0, 100, 50, key="look_pos",
+                                 help="0 = bord gauche, 100 = bord droit. Valable pour toutes les scènes.") / 100
+    if none:
+        st.caption("Source telle quelle : ni recadrage, ni fond, ni redimensionnement. Assemblé : une seule source.")
+    else:
+        fmt = st.radio("Format", FORMATS, key="look_ratio", horizontal=True)
+        if fmt != FORMATS[0]:
+            kw["ratio"] = fmt
+    if st.checkbox("Miroir (gauche/droite)", key="look_mirror"):
+        kw["mirror"] = True
+        st.caption("Le miroir inverse aussi les textes présents dans la source.")
+    return kw, none
+
+
+def render_sound(plan: Plan) -> dict:
+    """Expander « Son » fermé : chaque réglage n'apparaît que dans le mode qui l'utilise."""
+    has_src = source_has_audio(plan)
+    kw: dict = {}
+    with st.expander("Son"):
+        opts = ["Sans audio", *(["Audio de la source"] if has_src else []), "Musique ajoutée"]
+        pick = st.radio("Son", opts, key="snd_mode", horizontal=True, label_visibility="collapsed")
+        src, mus = pick.startswith("Audio"), pick.startswith("Musique")
+        if not has_src:
+            st.caption("La source n'a pas de piste audio : ni mode « source », ni mix.")
+        mix = False
+        if mus and has_src:
+            mix = st.checkbox("Mix sous la source (la musique baisse quand la source parle)", key="snd_mix")
+        if src or mix:
+            kw["audio_db"] = float(st.slider("Volume de la source (dB)", -40, 12, 0, key="snd_src_db"))
+        if mus:
+            files = list_music(MUSIC_DIR)
+            if files:
+                name = st.selectbox("Fichier (music/)", files, key="snd_file")
+                kw["music"] = f"music/{name}"
+            else:
+                st.caption("music/ est vide : dépose un fichier audio dans l'Explorateur, puis recharge la page.")
+            m1, m2, m3 = st.columns(3)
+            kw["music_start"] = float(m1.number_input("Début dans le morceau (s)", 0.0, 3600.0, 0.0, 1.0, key="snd_start"))
+            kw["music_db"] = float(m2.slider("Volume de la musique (dB)", -40, 12, 0, key="snd_mdb"))
+            kw["music_fade"] = round(float(m3.slider("Fondu (s)", 0.0, 0.5, 0.3, 0.05, key="snd_fade")), 2)
+        kw["audio"] = "none" if pick == "Sans audio" else "source" if src else "mix" if mix else "music"
+        if pick != "Sans audio" and st.checkbox("Écho", key="snd_echo"):
+            e1, e2 = st.columns(2)
+            kw["echo"] = True
+            kw["echo_ms"] = float(e1.slider("Retard (ms)", 20, 1000, 120, 10, key="snd_ems"))
+            kw["echo_decay"] = min(0.7, round(float(e2.slider("Niveau", 0.05, 0.7, 0.3, 0.05, key="snd_edec")), 2))
+    return kw
+
+
 def main() -> None:
     st.set_page_config(page_title="MT", page_icon="🎬", layout="wide")
     st.markdown(CSS, unsafe_allow_html=True)
@@ -356,19 +437,9 @@ def main() -> None:
     t2.button("Tout décocher", on_click=on_all, args=(False,), use_container_width=True)
     t3.button("Inverser", on_click=on_invert, use_container_width=True)
     t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
-    fit = st.radio("Cadrage 9:16", ["Bandes (image entière)", "Plein cadre (recadré)", "Aucun (source telle quelle)"],
-                   key="look_fit", horizontal=True)
-    full, none = fit.startswith("Plein"), fit.startswith("Aucun")
-    bgc, pos = "Flou", 50
-    if not full and not none:  # réglage affiché seulement s'il sert
-        bgc = st.radio("Fond des bandes", ["Flou", "Noir"], key="look_bg", horizontal=True)
-    if full:
-        pos = st.slider("Position du recadrage", 0, 100, 50, key="look_pos",
-                        help="0 = bord gauche, 100 = bord droit. Valable pour toutes les scènes.")
-    if none:
-        st.caption("Source telle quelle : ni recadrage, ni fond, ni redimensionnement. Assemblé : une seule source.")
-    look = Look(fit="none" if none else "fill" if full else "bars",
-                background="black" if bgc == "Noir" else "blur", anchor=pos / 100)
+    kw, none = render_frame()
+    kw.update(render_sound(plan))
+    look = Look(**kw)
     a1, a2, a3, a4 = st.columns(4)
     a1.button("Appliquer la sélection", on_click=on_select,
               type="primary" if dirty else "secondary", use_container_width=True)
