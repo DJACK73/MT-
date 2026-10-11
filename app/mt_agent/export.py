@@ -221,7 +221,14 @@ def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         if silent:
             raise PlanError(f"audio de la source : pas de piste audio dans {silent} ; choisir « Sans audio »")
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"{plan_id(plan)}.mp4"
+    stem = plan_id(plan)
+    out = out_dir / f"{stem}.mp4"
+    for k in range(2, 100):  # rendu déjà présent (autre Look) : suffixe -2, -3… (rien n'est écrasé)
+        if not out.exists():
+            break
+        out = out_dir / f"{stem}-{k}.mp4"
+    else:
+        raise PlanError(f"trop de rendus existants: {out_dir / stem}")
     args: list[str] = []
     for p in vsrcs:
         args += ["-i", str(p)]
@@ -234,7 +241,9 @@ def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         args += ["-t", f"{total:.3f}"]
     args += ["-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast", "-movflags", "+faststart"]
     run_ffmpeg(args, out)
-    done = save_plan(plan.model_copy(update={"status": "rendered"}), out_dir)
+    rendered = plan.model_copy(update={"status": "rendered"})
+    known = out_dir / f"{plan_id(rendered)}.rendered.json"
+    done = known if known.exists() else save_plan(rendered, out_dir)
     return out, done
 
 def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,

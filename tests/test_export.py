@@ -1,8 +1,8 @@
 import subprocess, tempfile, unittest
 from pathlib import Path
 from mt_agent.approval import PlanError, approve
-from mt_agent.export import build_graph, export_plan
-from mt_agent.ffx import MediaError, duration, run_ffmpeg
+from mt_agent.export import Look, build_graph, export_plan
+from mt_agent.ffx import duration, run_ffmpeg
 from mt_agent.models import Options, Plan, Scene, Source
 
 def _size(p: Path) -> tuple[int, int]:
@@ -42,8 +42,20 @@ class Export(unittest.TestCase):
                     self.assertAlmostEqual(duration(str(mp4)), 4.0, delta=0.2)
                     self.assertTrue(js.name.endswith(".rendered.json"))
                     with self.assertRaises(PlanError): export_plan(plan.model_copy(update={"status": "rendered"}), d, out_dir)
-                    with self.assertRaises(MediaError): export_plan(plan, d, out_dir)  # mp4 existe : refus
-                    self.assertEqual(sorted(x.suffix for x in out_dir.iterdir()), [".json", ".mp4"])  # aucun .part
+                    mp4b, jsb = export_plan(plan, d, out_dir)  # mp4 existe : suffixe, rien écrasé
+                    self.assertEqual(mp4b.name, mp4.stem + "-2.mp4")
+                    self.assertTrue(mp4.is_file())
+                    self.assertEqual(jsb, js)  # json rendu déjà présent : réutilisé
+                    self.assertEqual(sorted(x.suffix for x in out_dir.iterdir()), [".json", ".mp4", ".mp4"])  # aucun .part
+    def test_deux_rendus_meme_plan(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t); src = d / "s.mp4"
+            run_ffmpeg(["-f", "lavfi", "-i", "testsrc=s=320x240:d=6:r=25", "-pix_fmt", "yuv420p"], src)
+            plan = approve(_plan(str(src))); out_dir = d / "o"
+            a, _ = export_plan(plan, d, out_dir, look=Look(ratio="9:16"))
+            b, _ = export_plan(plan, d, out_dir, look=Look(ratio="16:9"))
+            self.assertNotEqual(a, b)
+            self.assertEqual((_size(a), _size(b)), ((1080, 1920), (1920, 1080)))
     def test_unapproved_renders_nothing(self):
         with tempfile.TemporaryDirectory() as t:
             out = Path(t) / "o"

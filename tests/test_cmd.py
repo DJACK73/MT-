@@ -27,7 +27,10 @@ class Cmd(unittest.TestCase):
             self.assertEqual(_run(["approve", pending], r)[0], 1)         # 2e approbation : refus d'écraser
             code, out = _run(["export", approved], r.resolve()); self.assertEqual(code, 0)
             self.assertAlmostEqual(duration(out.splitlines()[0]), 10.0, delta=0.2)
-            self.assertEqual(_run(["export", approved], r)[0], 1)         # pas d'écrasement
+            code2, out2 = _run(["export", approved], r.resolve()); self.assertEqual(code2, 0)  # 2e rendu : suffixe, rien écrasé
+            self.assertNotEqual(out2.splitlines()[0], out.splitlines()[0])
+            self.assertTrue(Path(out.splitlines()[0]).is_file())
+            self.assertEqual(len(list((r / "output").glob("*.mp4"))), 2)
             self.assertEqual([p.name for p in (r / "inbox").iterdir()], ["s.mp4"])
     def test_errors(self):
         with tempfile.TemporaryDirectory() as t:
