@@ -62,6 +62,16 @@ def _switch(new: Path) -> None:
     _flash("success", f"plan écrit : {new.name}")
 
 
+def _save_or_open(new: Plan, d: Path) -> None:
+    """Plan déjà écrit (même contenu, même statut) : on le rouvre au lieu d'échouer."""
+    target = d / f"{plan_id(new)}.{new.status}.json"
+    if target.exists():
+        st.session_state["plan_path"] = str(target)
+        _flash("info", "plan identique déjà présent : rouvert")
+    else:
+        _switch(save_plan(new, d))
+
+
 def _flags(plan: Plan, pk: str) -> list[bool]:
     return [bool(st.session_state.get(f"sel:{pk}:{i}", sc.selected)) for i, sc in enumerate(plan.scenes, 1)]
 
@@ -87,7 +97,7 @@ def on_select() -> None:
             st.session_state["spec"] = ""
             _flash("info", "Sélection déjà enregistrée : rien à changer")
             return
-        _switch(save_plan(new, path.parent))
+        _save_or_open(new, path.parent)
         st.session_state["spec"] = ""
     except ERRORS as e:
         _flash("error", str(e))
@@ -96,7 +106,7 @@ def on_select() -> None:
 def on_approve() -> None:
     path = Path(st.session_state["plan_path"])
     try:
-        _switch(save_plan(approve(load(path)), path.parent))
+        _save_or_open(approve(load(path)), path.parent)
     except ERRORS as e:
         _flash("error", str(e))
 
