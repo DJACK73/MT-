@@ -10,6 +10,7 @@ from mt_agent.export import Look, export_clips, export_plan
 from mt_agent.models import Options, Plan
 from mt_agent.paths import ROOT
 from mt_agent.selection import select_scenes
+from mt_agent.compose import compose_plan, letter
 from mt_agent.thumbs import make_thumbnails
 from mt_agent.selection import spec_from_flags
 from mt_agent.preview import preview_clip
@@ -67,7 +68,7 @@ def _flags(plan: Plan, pk: str) -> list[bool]:
 
 def plan_label(p: str) -> str:
     pl = load(Path(p))
-    stem = Path(pl.sources[0].path).stem if pl.sources else "?"
+    stem = " + ".join(Path(s.path).stem for s in pl.sources) or "?"
     return f"{STATUS_FR[pl.status]} · {stem} · {sum(s.selected for s in pl.scenes)}/{len(pl.scenes)} scènes · {Path(p).name[:8]}"
 
 
@@ -264,6 +265,106 @@ def render_clean() -> None:
                 confirm_clean(lvl)
 
 
+COLORS = ["blue", "green", "orange", "violet", "red", "gray"]
+
+
+def _ck(p: str, n: int) -> str:
+    return f"cmp:{Path(p).name}:{n}"
+
+
+def _order() -> list[tuple[str, int]]:
+    chosen = set(st.session_state.get("cmp_plans", []))
+    return [(p, n) for p, n in st.session_state.get("cmp_order", []) if p in chosen]
+
+
+def on_cmp_tick(key: str, p: str, n: int) -> None:
+    order = [x for x in _order() if x != (p, n)]
+    if st.session_state.get(key):
+        order.append((p, n))
+    st.session_state["cmp_order"] = order
+
+
+def on_cmp_move(k: int, step: int) -> None:
+    order = _order()
+    j = k + step
+    if 0 <= j < len(order):
+        order[k], order[j] = order[j], order[k]
+        st.session_state["cmp_order"] = order
+
+
+def on_cmp_drop(k: int) -> None:
+    order = _order()
+    p, n = order.pop(k)
+    st.session_state[_ck(p, n)] = False
+    st.session_state["cmp_order"] = order
+
+
+def on_cmp_clear() -> None:
+    for p, n in _order():
+        st.session_state[_ck(p, n)] = False
+    st.session_state["cmp_order"] = []
+
+
+def on_compose() -> None:
+    chosen = list(st.session_state.get("cmp_plans", []))
+    order = [(chosen.index(p), n) for p, n in _order()]
+    try:
+        new = compose_plan([load(Path(p)) for p in chosen], order)
+        target = PLANS / f"{plan_id(new)}.{new.status}.json"
+        if target.exists():
+            st.session_state["plan_path"] = str(target)
+            _flash("info", "montage identique déjà présent : rouvert")
+        else:
+            _switch(save_plan(new, PLANS))
+    except ERRORS as e:
+        _flash("error", str(e))
+
+
+def render_compose(plans: list[str]) -> None:
+    with st.expander("③ Composer plusieurs vidéos (ordre de cochage)"):
+        st.session_state["cmp_plans"] = [p for p in st.session_state.get("cmp_plans", []) if p in plans]
+        chosen = st.multiselect("Plans à composer (un par vidéo)", plans, key="cmp_plans", format_func=plan_label)
+        if not chosen:
+            st.caption("Choisis les plans (un par vidéo), puis coche les scènes : l'ordre de cochage devient l'ordre du montage.")
+            return
+        loaded = [load(Path(p)) for p in chosen]
+        pl_of = dict(zip(chosen, loaded))
+        idx = {p: i for i, p in enumerate(chosen)}
+        st.caption(" · ".join(f":{COLORS[i % len(COLORS)]}[**{letter(i)}**] = " + " + ".join(Path(s.path).stem for s in pl.sources)
+                              for i, pl in enumerate(loaded)))
+        order = _order()
+        rank = {x: r for r, x in enumerate(order, 1)}
+        if order:
+            st.markdown("**Ordre choisi** : " + " → ".join(
+                f":{COLORS[idx[p] % len(COLORS)]}[{letter(idx[p])}·{n}]" for p, n in order))
+            for k, (p, n) in enumerate(order):
+                sc = pl_of[p].scenes[n - 1]
+                c1, c2, c3, c4 = st.columns([1, 1, 1, 8])
+                c1.button("↑", key=f"cmp_up_{k}", on_click=on_cmp_move, args=(k, -1), disabled=k == 0, use_container_width=True)
+                c2.button("↓", key=f"cmp_dn_{k}", on_click=on_cmp_move, args=(k, 1), disabled=k == len(order) - 1, use_container_width=True)
+                c3.button("✕", key=f"cmp_rm_{k}", on_click=on_cmp_drop, args=(k,), use_container_width=True)
+                c4.write(f"{k + 1}. {letter(idx[p])}·{n} · {sc.end - sc.start:.2f} s")
+            total = sum(pl_of[p].scenes[n - 1].end - pl_of[p].scenes[n - 1].start for p, n in order)
+            st.caption(f"{len(order)} scène(s) · {total:.1f} s")
+            b1, b2, _ = st.columns([1.4, 1, 5])
+            b1.button("Composer le montage", key="cmp_go", type="primary", on_click=on_compose, use_container_width=True)
+            b2.button("Vider l'ordre", key="cmp_clear", on_click=on_cmp_clear, use_container_width=True)
+        else:
+            st.caption("Aucune scène choisie : coche « dans le montage » sur les vignettes.")
+        for i, (p, pl) in enumerate(zip(chosen, loaded)):
+            col = COLORS[i % len(COLORS)]
+            st.markdown(f"**:{col}[{letter(i)}]** · {plan_label(p)}")
+            thumbs = make_thumbnails(pl, ROOT)
+            cols = st.columns(COLS)
+            for n, (sc, th) in enumerate(zip(pl.scenes, thumbs), 1):
+                with cols[(n - 1) % COLS], st.container(border=True, key=f"cmpcard_{i}_{n}"):
+                    st.image(str(th))
+                    r = rank.get((p, n))
+                    st.caption(f":{col}[**{letter(i)}·{n}**] · {sc.end - sc.start:.2f} s" + (f" · **ordre {r}**" if r else ""))
+                    key = _ck(p, n)
+                    st.checkbox("dans le montage", key=key, on_change=on_cmp_tick, args=(key, p, n))
+
+
 def _export_video(plan: Plan, look: Look) -> None:
     with st.spinner("Rendu de la vidéo en cours (plusieurs minutes possibles)…"):
         try:
@@ -381,6 +482,8 @@ def main() -> None:
     plans = list_plans(PLANS)
     with st.expander("① Découper une vidéo", expanded=not plans):
         render_scan()
+    if len(plans) >= 2:
+        render_compose(plans)
     if not plans:
         st.info("Aucun plan pour l'instant : découpe une vidéo ci-dessus.")
         render_clean()
@@ -438,6 +541,8 @@ def main() -> None:
     t3.button("Inverser", on_click=on_invert, use_container_width=True)
     t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
     kw, none = render_frame()
+    if none and len({sc.source_id for sc in plan.scenes if sc.selected}) > 1:
+        st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
     kw.update(render_sound(plan))
     look = Look(**kw)
     a1, a2, a3, a4 = st.columns(4)
@@ -468,12 +573,15 @@ def main() -> None:
     else:
         st.caption(f"Plan découpé en fenêtre {lo:g}–{mx:g} s : {bad} scène(s) hors fenêtre. ▼ trop courte, ▲ trop longue.")
     cols = st.columns(COLS)
+    ids = [x.id for x in plan.sources]
     for i, (sc, th) in enumerate(zip(plan.scenes, thumbs), 1):
         with cols[(i - 1) % COLS], st.container(border=True, key=f"card_{i}"):
             dur = sc.end - sc.start
             flag = window_flag(dur, lo, hi)
             st.image(str(th))
-            st.caption(f"**{i}** · {dur:.2f} s" + (f" :orange[{flag}]" if flag else ""))
+            tag = (f":{COLORS[ids.index(sc.source_id) % len(COLORS)]}[**{letter(ids.index(sc.source_id))}**] · "
+                   if len(ids) > 1 and sc.source_id in ids else "")
+            st.caption(tag + f"**{i}** · {dur:.2f} s" + (f" :orange[{flag}]" if flag else ""))
             k = f"sel:{pk}:{i}"
             if k not in st.session_state:
                 st.session_state[k] = sc.selected

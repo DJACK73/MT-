@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .compose import letter
 from collections.abc import Callable
 from pathlib import Path
 from .approval import PlanError, assert_renderable, plan_id, save_plan
@@ -277,7 +278,9 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     sound: dict[str, bool] = {}
     if use_m:
         _check_music(mfile, mstart)
-    stem = Path(paths[chosen[0][1].source_id]).stem
+    multi = len(plan.sources) > 1  # montage multi-vidéos : NNN-<lettre de la vidéo>.mp4
+    lets = {s.id: letter(i) for i, s in enumerate(plan.sources)}
+    stem = "montage" if multi else Path(paths[chosen[0][1].source_id]).stem
     base = f"{stem}-{plan_id(plan)[:8]}"
     folder = out_dir / "clips" / base
     for k in range(1, 100):  # dossier déjà présent : suffixe -2, -3… (rien n'est écrasé)
@@ -311,7 +314,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         elif with_a:  # "?" : source sans piste audio => clip muet, pas d'erreur
             args += ["-map", "0:a:0?", "-af", _afilter(d, db) + (f",{ech}" if ech else ""), "-c:a", "aac", "-b:a", "192k"]
         args += ["-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast", "-movflags", "+faststart"]
-        dest = folder / f"{n:03d}.mp4"
+        dest = folder / (f"{n:03d}-{lets[sc.source_id]}.mp4" if multi else f"{n:03d}.mp4")
         run_ffmpeg(args, dest)
         done.append(dest)
         if on_progress is not None:
