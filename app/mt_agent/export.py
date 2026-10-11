@@ -11,6 +11,7 @@ from .paths import ensure_outside_inbox
 
 PROFILES: dict[str, tuple[int, int]] = {"youtube": (1920, 1080), "vertical": (1080, 1920)}
 _TAIL = "setsar=1,fps=25,format=yuv420p"
+RATIOS: dict[str, tuple[int, int]] = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080)}
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,7 @@ class Look:
     fit: Literal["bars", "fill", "none"] | None = None  # None = suit plan.options.framing
     background: Literal["blur", "black"] = "blur"  # fond des bandes (fit="bars")
     anchor: float = 0.5  # fit="fill" : 0 = bord gauche, 1 = bord droit
+    ratio: Literal["9:16", "16:9", "1:1"] | None = None  # None = suit plan.options.profile
     audio: Literal["none", "source", "music", "mix"] = "none"  # son du clip ; défaut : muet
     audio_db: float = 0.0  # gain appliqué à l'audio de la source
     music: str | None = None  # fichier (relatif à la racine) pour audio="music" ou "mix"
@@ -31,11 +33,23 @@ class Look:
     echo_decay: float = 0.3  # niveau de l'écho, 0..0.7
 
 
+def _size(plan: Plan, look: Look | None) -> tuple[int, int]:
+    """Taille de sortie : format du rendu, sinon profil du plan."""
+    r = look.ratio if look else None
+    if r is None:
+        return PROFILES[plan.options.profile]
+    if r not in RATIOS:
+        raise PlanError(f"format inconnu: {r}")
+    return RATIOS[r]
+
+
 def _look(plan: Plan, look: Look | None) -> tuple[str, str, float]:
     look = look or Look()
     if not 0.0 <= look.anchor <= 1.0:
         raise PlanError(f"position hors de 0..1: {look.anchor}")
     fit = look.fit or ("fill" if plan.options.framing == "crop_center" else "bars")
+    if fit == "none" and look.ratio is not None:
+        raise PlanError("cadrage « Aucun » : source telle quelle, aucun format à appliquer")
     if fit == "none":  # source telle quelle
         return "none", look.background, look.anchor
     return ("crop_center" if fit == "fill" else "blur_pad"), look.background, look.anchor
@@ -152,7 +166,7 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
             raise PlanError(f"source inconnue: {sc.source_id}")
         if sc.source_id not in order:
             order.append(sc.source_id)
-    w, h = PROFILES[plan.options.profile]
+    w, h = _size(plan, look)
     fr, bg, cx = _look(plan, look)
     if fr == "none" and len(order) > 1:
         raise PlanError("cadrage « Aucun » : export assemblé limité à une seule source "
@@ -244,7 +258,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     missing = [str(p) for p in srcs.values() if not p.is_file()]
     if missing:
         raise PlanError(f"sources absentes: {missing}")
-    w, h = PROFILES[plan.options.profile]
+    w, h = _size(plan, look)
     fr, bg, cx = _look(plan, look)
     with_a, db = _audio(look)
     use_m, mpath, mstart, mdb, mfade = _music(look)
