@@ -47,3 +47,15 @@ def duration(path: str) -> float:
     if d <= 0:
         raise MediaError(f"durée invalide : {d}")
     return d
+
+
+def has_audio(path: str) -> bool:
+    cmd = ["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index",
+           "-of", "csv=p=0", path]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        raise MediaError(f"ffprobe indisponible : {e}") from e
+    if r.returncode:
+        raise MediaError(r.stderr[-500:])
+    return bool(r.stdout.strip())

@@ -2,7 +2,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 from .approval import PlanError, assert_renderable, plan_id, save_plan
-from .ffx import run_ffmpeg
+from .ffx import has_audio, run_ffmpeg
 from .models import Plan
 from dataclasses import dataclass
 from typing import Literal
@@ -19,6 +19,8 @@ class Look:
     fit: Literal["bars", "fill", "none"] | None = None  # None = suit plan.options.framing
     background: Literal["blur", "black"] = "blur"  # fond des bandes (fit="bars")
     anchor: float = 0.5  # fit="fill" : 0 = bord gauche, 1 = bord droit
+    audio: Literal["none", "source"] = "none"  # son du clip ; défaut : muet
+    audio_db: float = 0.0  # gain appliqué à l'audio de la source
 
 
 def _look(plan: Plan, look: Look | None) -> tuple[str, str, float]:
@@ -29,6 +31,30 @@ def _look(plan: Plan, look: Look | None) -> tuple[str, str, float]:
     if fit == "none":  # source telle quelle
         return "none", look.background, look.anchor
     return ("crop_center" if fit == "fill" else "blur_pad"), look.background, look.anchor
+
+_FADE = 0.02  # fondu de bord (s) : évite les clics aux coupes
+
+
+def _audio(look: Look | None) -> tuple[bool, float]:
+    """(audio de la source ?, gain en dB). Défaut : sans audio."""
+    look = look or Look()
+    if look.audio not in ("none", "source"):
+        raise PlanError(f"mode audio inconnu: {look.audio}")
+    if not -40.0 <= look.audio_db <= 12.0:
+        raise PlanError(f"volume hors de -40..+12 dB: {look.audio_db}")
+    return look.audio == "source", look.audio_db
+
+
+def _afilter(d: float, db: float = 0.0) -> str:
+    f = min(_FADE, d / 2)
+    vol = f"volume={db:g}dB," if db else ""
+    return f"{vol}afade=t=in:d={f:g},afade=t=out:st={d - f:.3f}:d={f:g}"
+
+
+def _anode(i: int, j: int, s: float, e: float) -> str:
+    return (f"[{j}:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS,"
+            f"aformat=sample_rates=48000:channel_layouts=stereo,{_afilter(e - s)}[a{i}]")
+
 
 def _node(i: int, j: int, s: float, e: float, framing: str, w: int, h: int,
           bg: str = "blur", cx: float = 0.5) -> str:
@@ -68,8 +94,16 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
                         "(tailles possiblement différentes) ; utiliser les clips séparés")
     nodes = [_node(i, order.index(sc.source_id), sc.start, sc.end, fr, w, h, bg, cx)
              for i, sc in enumerate(chosen)]
-    labels = "".join(f"[v{i}]" for i in range(len(chosen)))
-    return [paths[k] for k in order], ";".join([*nodes, f"{labels}concat=n={len(chosen)}:v=1:a=0[out]"])
+    with_a, db = _audio(look)
+    n = len(chosen)
+    srcs = [paths[k] for k in order]
+    if not with_a:
+        labels = "".join(f"[v{i}]" for i in range(n))
+        return srcs, ";".join([*nodes, f"{labels}concat=n={n}:v=1:a=0[out]"])
+    anodes = [_anode(i, order.index(sc.source_id), sc.start, sc.end) for i, sc in enumerate(chosen)]
+    labels = "".join(f"[v{i}][a{i}]" for i in range(n))
+    gain = f"volume={db:g}dB" if db else "anull"
+    return srcs, ";".join([*nodes, *anodes, f"{labels}concat=n={n}:v=1:a=1[out][ac]", f"[ac]{gain}[aud]"])
 
 def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
                 look: Look | None = None) -> tuple[Path, Path]:
@@ -81,13 +115,20 @@ def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     missing = [str(p) for p in srcs if not p.is_file()]
     if missing:
         raise PlanError(f"sources absentes: {missing}")
+    with_a, _ = _audio(look)
+    if with_a:
+        silent = [str(p) for p in srcs if not has_audio(str(p))]
+        if silent:
+            raise PlanError(f"audio de la source : pas de piste audio dans {silent} ; choisir « Sans audio »")
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"{plan_id(plan)}.mp4"
     args: list[str] = []
     for p in srcs:
         args += ["-i", str(p)]
-    args += ["-filter_complex", fc, "-map", "[out]", "-c:v", "libx264", "-crf", str(crf),
-             "-preset", "veryfast", "-movflags", "+faststart"]
+    args += ["-filter_complex", fc, "-map", "[out]"]
+    if with_a:
+        args += ["-map", "[aud]", "-c:a", "aac", "-b:a", "192k"]
+    args += ["-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast", "-movflags", "+faststart"]
     run_ffmpeg(args, out)
     done = save_plan(plan.model_copy(update={"status": "rendered"}), out_dir)
     return out, done
@@ -115,6 +156,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         raise PlanError(f"sources absentes: {missing}")
     w, h = PROFILES[plan.options.profile]
     fr, bg, cx = _look(plan, look)
+    with_a, db = _audio(look)
     stem = Path(paths[chosen[0][1].source_id]).stem
     base = f"{stem}-{plan_id(plan)[:8]}"
     folder = out_dir / "clips" / base
@@ -132,8 +174,10 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         d = sc.end - sc.start
         node = _node(0, 0, 0.0, d, fr, w, h, bg, cx)
         args = ["-ss", f"{sc.start:.3f}", "-t", f"{d:.3f}", "-i", str(srcs[sc.source_id]),
-                "-filter_complex", node, "-map", "[v0]", "-c:v", "libx264", "-crf", str(crf),
-                "-preset", "veryfast", "-movflags", "+faststart"]
+                "-filter_complex", node, "-map", "[v0]"]
+        if with_a:  # "?" : source sans piste audio => clip muet, pas d'erreur
+            args += ["-map", "0:a:0?", "-af", _afilter(d, db), "-c:a", "aac", "-b:a", "192k"]
+        args += ["-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast", "-movflags", "+faststart"]
         dest = folder / f"{n:03d}.mp4"
         run_ffmpeg(args, dest)
         done.append(dest)
