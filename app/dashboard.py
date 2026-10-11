@@ -160,7 +160,7 @@ def render_scan() -> None:
         w2.button("Fenêtre 3–5 s", on_click=_window, args=(3.0, 5.0), use_container_width=True)
     elif manual:
         text = st.text_area("Plages (une par ligne : début-fin)", key="scan_spans", height=120)
-        st.caption("Ex. 12.5-16 · 1:02-1:08.5 · 40-fin. Secondes ou m:ss ; une plage par ligne ou séparées par « ; ». "
+        st.caption("Ex. 12.5-16 · 1:02-1:08.5 · 40-fin. Secondes ou m:ss ; une plage par ligne, ou séparées par « ; » ou une virgule suivie d'un espace. "
                    "L'ordre saisi est conservé.")
     else:
         st.caption("Une seule scène : la vidéo entière, sans coupe.")

@@ -38,6 +38,14 @@ class Manual(unittest.TestCase):
     def test_entiere(self) -> None:
         self.assertEqual(whole_spans(12.3456), [(0.0, 12.346)])
 
+    def test_virgule(self) -> None:
+        want = [(5.0, 9.0), (20.0, 24.0)]
+        for ok in ("5-9 , 20-24", "5-9, 20-24", "5-9 ,20-24", "5-9;20-24"):
+            self.assertEqual(parse_spans(ok, 60.0), want, ok)
+        self.assertEqual(parse_spans("12,5-16", 60.0), [(12.5, 16.0)])
+        with self.assertRaises(ValueError):
+            parse_spans("5-9,20-24", 60.0)  # collée : ambigu, refusé
+
 
 if __name__ == "__main__":
     unittest.main()

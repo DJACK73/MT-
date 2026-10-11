@@ -8,7 +8,7 @@ from .models import Options, Plan, Scene, Source
 
 _NUM = re.compile(r"^\d+(\.\d+)?$")
 _SEP = re.compile(r"\s*[-–→]\s*")
-_LINES = re.compile(r"[\n;]+")  # pas la virgule : « 12,5 » est un décimal
+_LINES = re.compile(r"[\n;]+|\s*,\s+|\s+,\s*")  # virgule séparatrice seulement si espacée : « 12,5 » reste un décimal
 
 
 def parse_time(tok: str, total: float) -> float:
