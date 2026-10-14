@@ -59,7 +59,7 @@ def _flash(kind: str, msg: str) -> None:
 
 def _switch(new: Path) -> None:
     st.session_state["plan_path"] = str(new)
-    _flash("success", f"plan écrit : {new.name}")
+    _flash("success", f"plan écrit : {new.name} → onglet ③ Montage")
 
 
 def _save_or_open(new: Plan, d: Path) -> None:
@@ -331,7 +331,10 @@ def on_compose() -> None:
 
 
 def render_compose(plans: list[str]) -> None:
-    with st.expander("③ Composer plusieurs vidéos (ordre de cochage)"):
+    if len(plans) < 2:
+        st.caption("Il faut au moins 2 plans (un par vidéo) pour composer un montage.")
+        return
+    with st.container():
         st.session_state["cmp_plans"] = [p for p in st.session_state.get("cmp_plans", []) if p in plans]
         chosen = st.multiselect("Plans à composer (un par vidéo)", plans, key="cmp_plans", format_func=plan_label)
         if not chosen:
@@ -490,15 +493,21 @@ def main() -> None:
     if flash:
         getattr(st, flash[0])(flash[1])
     plans = list_plans(PLANS)
-    with st.expander("① Découper une vidéo", expanded=not plans):
+    t_scan, t_cmp, t_plan = st.tabs(["① Découper", "② Composer", "③ Montage"])
+    with t_scan:
         render_scan()
-    if len(plans) >= 2:
+    with t_cmp:
         render_compose(plans)
-    if not plans:
-        st.info("Aucun plan pour l'instant : découpe une vidéo ci-dessus.")
-        render_clean()
-        return
-    st.selectbox("② Plan à monter", plans, key="plan_path", format_func=plan_label)
+    with t_plan:
+        if plans:
+            render_plan(plans)
+        else:
+            st.info("Aucun plan pour l'instant : découpe une vidéo dans l'onglet ①.")
+    render_clean()
+
+
+def render_plan(plans: list[str]) -> None:
+    st.selectbox("Plan à monter", plans, key="plan_path", format_func=plan_label)
     path = Path(st.session_state["plan_path"])
     plan = load(path)
     pk = path.name
@@ -514,18 +523,6 @@ def main() -> None:
     c2.metric("Scènes", f"{sum(saved)}/{len(saved)}")
     c3.metric("Durée retenue", f"{kept:.1f} s")
     saved_any = any(saved)
-    if plan.status == "rendered" and not dirty:
-        step = 4
-    elif approved and not dirty:
-        step = 3
-    elif saved_any and not dirty:
-        step = 2
-    else:
-        step = 1
-    labels = ["Découper", "Choisir", "Approuver", "Exporter"]
-    st.markdown("  →  ".join(
-        f":green[✓ {n}]" if j < step else f"**:orange[● {n}]**" if j == step else f":gray[{n}]"
-        for j, n in enumerate(labels)))
     lo = plan.options.min_scene_seconds
     mx = plan.options.max_scene_seconds
     hi = float("inf") if mx is None else mx
@@ -550,7 +547,8 @@ def main() -> None:
     t2.button("Tout décocher", on_click=on_all, args=(False,), use_container_width=True)
     t3.button("Inverser", on_click=on_invert, use_container_width=True)
     t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
-    kw, none = render_frame()
+    with st.expander("Cadrage et format"):
+        kw, none = render_frame()
     if none and len({sc.source_id for sc in plan.scenes if sc.selected}) > 1:
         st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
     kw.update(render_sound(plan))
@@ -600,6 +598,5 @@ def main() -> None:
             if v.button("▶ voir", key=f"v:{pk}:{i}", use_container_width=True):
                 st.session_state["pv"] = i
                 show_clip()
-    render_clean()
 
 main()
