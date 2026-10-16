@@ -27,4 +27,16 @@ class InboxMarks(unittest.TestCase):
         with patch("mt_agent.paths.ROOT", r):
             at = AppTest.from_file(str(APP), default_timeout=60).run()
             self.assertEqual(len(at.exception), 0)
-            self.assertEqual(list(at.selectbox(key="scan_video").options), ["✓ a.mp4", "○ b.mp4"])
+            self.assertEqual(at.checkbox(key="pick:a.mp4").label, "✓ a.mp4")
+            self.assertEqual(at.checkbox(key="pick:b.mp4").label, "○ b.mp4")
+            self.assertEqual([s for s in at.selectbox if s.key == "scan_video"], [])
+
+    def test_une_seule_video_garde_le_menu(self) -> None:
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        r = Path(tmp.name); (r / "inbox").mkdir()
+        run_ffmpeg(["-f", "lavfi", "-i", "color=c=red:s=320x240:d=10:r=25", "-pix_fmt", "yuv420p"], r / "inbox" / "a.mp4")
+        with patch("mt_agent.paths.ROOT", r):
+            at = AppTest.from_file(str(APP), default_timeout=60).run()
+            self.assertEqual(len(at.exception), 0)
+            self.assertEqual(list(at.selectbox(key="scan_video").options), ["○ a.mp4"])
+            self.assertEqual([c for c in at.checkbox if str(c.key).startswith("pick:")], [])

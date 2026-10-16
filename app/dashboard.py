@@ -164,9 +164,11 @@ def render_scan() -> None:
     mode = st.radio("Mode de découpe", MODES, key="scan_mode", horizontal=True)
     auto, manual = mode.startswith("Auto"), mode.startswith("Manuel")
     done = cut_names()
-    st.selectbox("Vidéo (inbox/)", videos, key="scan_video",
-                 format_func=lambda n: ("✓ " if n in done else "○ ") + n,
-                 help="✓ déjà découpée · ○ pas encore")
+    multi = len(videos) > 1 and not manual
+    if not multi:  # plusieurs vidéos : les coches ci-dessous remplacent le menu
+        st.selectbox("Vidéo (inbox/)", videos, key="scan_video",
+                     format_func=lambda n: ("✓ " if n in done else "○ ") + n,
+                     help="✓ déjà découpée · ○ pas encore")
     lo, hi, text = 3.0, 5.0, ""
     if auto:  # Min/Max et préréglages : visibles seulement s'ils servent
         s1, s2, _ = st.columns([1, 1, 6])
@@ -192,13 +194,17 @@ def render_scan() -> None:
             for n in videos:
                 st.checkbox(("✓ " if n in done else "○ ") + n, value=True, key=f"pick:{n}")
         picked = [n for n in videos if st.session_state.get(f"pick:{n}", True)]
-    b1, b2, _ = st.columns([1, 1.4, 5])
-    one = b1.button("Découper" if auto else "Créer le plan" if manual else "Garder la vidéo entière",
-                    type="primary", use_container_width=True)
+    b1, _ = st.columns([1.4, 5])
     whole = len(picked) == len(videos)
     batch_label = (f"Découper les {len(videos)} vidéos" if auto else f"Garder les {len(videos)} vidéos entières") if whole \
         else (f"Découper la sélection ({len(picked)})" if auto else f"Garder la sélection ({len(picked)})")
-    many = len(videos) > 1 and not manual and b2.button(batch_label, disabled=not picked, use_container_width=True)
+    if multi:
+        many = b1.button(batch_label, type="primary", disabled=not picked, use_container_width=True)
+        one = False
+    else:
+        many = False
+        one = b1.button("Découper" if auto else "Créer le plan" if manual else "Garder la vidéo entière",
+                        type="primary", use_container_width=True)
     if not (one or many):
         return
     if auto and hi < lo:
