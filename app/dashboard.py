@@ -148,6 +148,14 @@ def list_videos(d: Path) -> list[str]:
 MODES = ["Auto (scènes)", "Manuel (plages)", "Aucune (vidéo entière)"]
 
 
+def cut_names() -> set[str]:
+    """Noms des vidéos déjà présentes comme source d'au moins un plan."""
+    out: set[str] = set()
+    for p in list_plans(PLANS):
+        out.update(Path(s.path).name for s in load(Path(p)).sources)
+    return out
+
+
 def render_scan() -> None:
     videos = list_videos(ROOT / "inbox")
     if not videos:
@@ -155,7 +163,10 @@ def render_scan() -> None:
         return
     mode = st.radio("Mode de découpe", MODES, key="scan_mode", horizontal=True)
     auto, manual = mode.startswith("Auto"), mode.startswith("Manuel")
-    st.selectbox("Vidéo (inbox/)", videos, key="scan_video")
+    done = cut_names()
+    st.selectbox("Vidéo (inbox/)", videos, key="scan_video",
+                 format_func=lambda n: ("✓ " if n in done else "○ ") + n,
+                 help="✓ déjà découpée · ○ pas encore")
     lo, hi, text = 3.0, 5.0, ""
     if auto:  # Min/Max et préréglages : visibles seulement s'ils servent
         s1, s2, _ = st.columns([1, 1, 6])
@@ -175,17 +186,25 @@ def render_scan() -> None:
                    "L'ordre saisi est conservé.")
     else:
         st.caption("Une seule scène : la vidéo entière, sans coupe.")
+    picked = videos
+    if len(videos) > 1 and not manual:
+        with st.expander("Vidéos à découper ensemble", expanded=True):
+            for n in videos:
+                st.checkbox(("✓ " if n in done else "○ ") + n, value=True, key=f"pick:{n}")
+        picked = [n for n in videos if st.session_state.get(f"pick:{n}", True)]
     b1, b2, _ = st.columns([1, 1.4, 5])
     one = b1.button("Découper" if auto else "Créer le plan" if manual else "Garder la vidéo entière",
                     type="primary", use_container_width=True)
-    batch_label = f"Découper les {len(videos)} vidéos" if auto else f"Garder les {len(videos)} vidéos entières"
-    many = len(videos) > 1 and not manual and b2.button(batch_label, use_container_width=True)
+    whole = len(picked) == len(videos)
+    batch_label = (f"Découper les {len(videos)} vidéos" if auto else f"Garder les {len(videos)} vidéos entières") if whole \
+        else (f"Découper la sélection ({len(picked)})" if auto else f"Garder la sélection ({len(picked)})")
+    many = len(videos) > 1 and not manual and b2.button(batch_label, disabled=not picked, use_container_width=True)
     if not (one or many):
         return
     if auto and hi < lo:
         st.error("Max doit être supérieur ou égal à Min")
         return
-    targets = videos if many else [st.session_state["scan_video"]]
+    targets = picked if many else [st.session_state["scan_video"]]
     opt = Options(min_scene_seconds=lo, max_scene_seconds=hi) if auto else None
     PLANS.mkdir(parents=True, exist_ok=True)
     bar = st.progress(0.0, text="Découpe…")
