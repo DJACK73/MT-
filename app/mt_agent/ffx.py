@@ -1,5 +1,5 @@
 from __future__ import annotations
-import subprocess
+import subprocess, uuid
 from pathlib import Path
 
 class MediaError(RuntimeError):
@@ -12,8 +12,7 @@ def run_ffmpeg(args: list[str], out: Path | None = None, fmt: str = "mp4", timeo
     if out is not None:
         if out.exists():
             raise MediaError(f"refus d'écraser: {out}")
-        part = out.with_name(out.name + ".part")
-        part.unlink(missing_ok=True)
+        part = out.with_name(f"{out.name}.{uuid.uuid4().hex[:8]}.part")  # unique : deux exécutions ne se marchent pas dessus
         tail = ["-f", fmt, str(part)]
     cmd = ["ffmpeg", "-hide_banner", "-nostats", "-nostdin", "-n", *args, *tail]
     try:
