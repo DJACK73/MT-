@@ -29,6 +29,7 @@ class Look:
     music_db: float = 0.0
     music_fade: float = 0.3  # fondu d'entrée et de sortie (s), 0..0.5
     mirror: bool = False  # image inversée gauche/droite (hflip)
+    mirror_only: frozenset[int] = frozenset()  # scènes (n° du plan, base 1) inversées ; sans effet si mirror=True
     echo: bool = False  # écho sur l'audio final (exige un mode audio)
     echo_ms: float = 120.0  # retard de l'écho (ms), 20..1000
     echo_decay: float = 0.3  # niveau de l'écho, 0..0.7
@@ -124,6 +125,17 @@ def _echo(look: Look | None) -> str:
     return f"aecho=0.8:0.9:{look.echo_ms:g}:{look.echo_decay:g}"
 
 
+def _flip(look: Look | None, n: int) -> bool:
+    """Miroir de la scène n° n (numéro dans le plan, base 1)."""
+    return bool(look and (look.mirror or n in look.mirror_only))
+
+
+def _check_mirror(plan: Plan, look: Look | None) -> None:
+    bad = sorted(n for n in (look.mirror_only if look else ()) if not 1 <= n <= len(plan.scenes))
+    if bad:
+        raise PlanError(f"miroir : scènes hors de 1..{len(plan.scenes)}: {bad}")
+
+
 def _afilter(d: float, db: float = 0.0) -> str:
     f = min(_FADE, d / 2)
     vol = f"volume={db:g}dB," if db else ""
@@ -172,8 +184,10 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
     if fr == "none" and len(order) > 1:
         raise PlanError("cadrage « Aucun » : export assemblé limité à une seule source "
                         "(tailles possiblement différentes) ; utiliser les clips séparés")
+    _check_mirror(plan, look)
+    nums = [n for n, s in enumerate(plan.scenes, 1) if s.selected]
     nodes = [_node(i, order.index(sc.source_id), sc.start, sc.end, fr, w, h, bg, cx,
-                   bool(look and look.mirror))
+                   _flip(look, nums[i]))
              for i, sc in enumerate(chosen)]
     with_a, db = _audio(look)
     use_m, mpath, mstart, mdb, mfade = _music(look)
@@ -278,6 +292,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     sound: dict[str, bool] = {}
     if use_m:
         _check_music(mfile, mstart)
+    _check_mirror(plan, look)
     multi = len(plan.sources) > 1  # montage multi-vidéos : NNN-<lettre de la vidéo>.mp4
     lets = {s.id: letter(i) for i, s in enumerate(plan.sources)}
     stem = "montage" if multi else Path(paths[chosen[0][1].source_id]).stem
@@ -295,7 +310,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     done: list[Path] = []
     for k, (n, sc) in enumerate(chosen, 1):
         d = sc.end - sc.start
-        node = _node(0, 0, 0.0, d, fr, w, h, bg, cx, bool(look and look.mirror))
+        node = _node(0, 0, 0.0, d, fr, w, h, bg, cx, _flip(look, n))
         args = ["-ss", f"{sc.start:.3f}", "-t", f"{d:.3f}", "-i", str(srcs[sc.source_id]),
                 "-filter_complex", node, "-map", "[v0]"]
         if use_m:  # musique : 2e entrée bouclée, coupée net à la durée du clip

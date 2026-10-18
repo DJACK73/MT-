@@ -246,6 +246,29 @@ class Dashboard(unittest.TestCase):
             fit="bars", background="blur", anchor=0.5, ratio="16:9", mirror=True))
         self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
 
+    def test_miroir_par_scenes(self) -> None:
+        from mt_agent.export import Look, export_clips
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        self._ready(at)
+        at.text_input(key="look_mirror_spec").set_value("2").run()
+        with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
+            _btn(at, "Exporter en clips séparés").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        self.assertEqual(m.call_args.kwargs["look"], Look(
+            fit="bars", background="blur", anchor=0.5, mirror_only=frozenset({2})))
+        self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
+
+    def test_miroir_scene_hors_limites(self) -> None:
+        from mt_agent.export import export_clips
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        self._ready(at)
+        at.text_input(key="look_mirror_spec").set_value("99").run()
+        self.assertEqual(len(at.error), 1)
+        with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
+            _btn(at, "Exporter en clips séparés").click().run()
+        self.assertEqual(m.call_count, 0)
+
     def test_aucun_masque_format(self) -> None:
         at = AppTest.from_file(str(APP), default_timeout=60).run()
         at.radio(key="look_fit").set_value("Aucun (source telle quelle)").run()

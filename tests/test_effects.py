@@ -97,6 +97,32 @@ class EffetsTest(unittest.TestCase):
             self.assertEqual(a["codec_name"], "aac")
             self.assertAlmostEqual(float(a["duration"]), 1.5, delta=0.15)
 
+    def test_miroir_par_scene_pixels(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            _plan_reel(root)
+            plan = approve(Plan(options=Options(framing="crop_center"),
+                                sources=[Source(id="s", path="inbox/src.mp4", duration=3.0)],
+                                scenes=[Scene(source_id="s", start=float(i), end=i + 1.0, selected=True)
+                                        for i in range(3)]))
+            clips = export_clips(plan, root, root / "output",
+                                 look=Look(fit="none", mirror_only=frozenset({2})))
+            self.assertEqual([c.name for c in clips], ["001.mp4", "002.mp4", "003.mp4"])
+            gauche = [_bords(c)[0] for c in clips]
+            self.assertGreater(gauche[0], 192)  # scène 1 : blanc à gauche (source)
+            self.assertLess(gauche[1], 64)      # scène 2 : miroir, noir à gauche
+            self.assertGreater(gauche[2], 192)  # scène 3 : source
+
+    def test_miroir_par_scene_graphe(self) -> None:
+        plan = Plan(options=Options(framing="crop_center"),
+                    sources=[Source(id="s", path="inbox/src.mp4", duration=6.0)],
+                    scenes=[Scene(source_id="s", start=float(i), end=i + 1.0, selected=True) for i in range(3)])
+        _, fc = build_graph(plan, Look(fit="none", mirror_only=frozenset({2})))
+        self.assertEqual(fc.count("hflip"), 1)
+        self.assertIn("setpts=PTS-STARTPTS,hflip,format=yuv420p[v1]", fc)
+        with self.assertRaises(PlanError):
+            build_graph(plan, Look(fit="none", mirror_only=frozenset({4})))
+
 
 if __name__ == "__main__":
     unittest.main()
