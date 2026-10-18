@@ -360,8 +360,12 @@ def render_compose(plans: list[str]) -> None:
         st.caption("Il faut au moins 2 plans (un par vidéo) pour composer un montage.")
         return
     with st.container():
-        st.session_state["cmp_plans"] = [p for p in st.session_state.get("cmp_plans", []) if p in plans]
-        chosen = st.multiselect("Plans à composer (un par vidéo)", plans, key="cmp_plans", format_func=plan_label)
+        names = lambda q: [Path(s.path).name for s in load(Path(q)).sources]
+        chosen = []
+        for p in sorted(plans, key=names):
+            if st.checkbox(plan_label(p), value=len(names(p)) == 1, key=f"cmpp:{Path(p).name}"):
+                chosen.append(p)
+        st.session_state["cmp_plans"] = chosen
         if not chosen:
             st.caption("Choisis les plans (un par vidéo), puis coche les scènes : l'ordre de cochage devient l'ordre du montage.")
             return

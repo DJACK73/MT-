@@ -41,7 +41,6 @@ class DashboardCompose(unittest.TestCase):
     def _open(self):
         at = AppTest.from_file(str(APP), default_timeout=120).run()
         self.assertEqual(len(at.exception), 0)
-        at.multiselect(key="cmp_plans").set_value([self.pa, self.pb]).run()
         self.assertEqual(len(at.exception), 0)
         return at
 
@@ -82,3 +81,10 @@ class DashboardCompose(unittest.TestCase):
         self.assertEqual(len(at.exception), 0)
         self.assertEqual(at.session_state["cmp_order"], [(self.pa, 1), (self.pa, 3)])
         self.assertFalse(self._ck(at, self.pb, 2).value)
+
+    def test_decocher_un_plan(self) -> None:
+        at = self._open()
+        self.assertEqual(at.session_state["cmp_plans"], [self.pa, self.pb])
+        at.checkbox(key=f"cmpp:{Path(self.pb).name}").uncheck().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(at.session_state["cmp_plans"], [self.pa])
