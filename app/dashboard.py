@@ -128,7 +128,7 @@ def show_clip() -> None:
     sc = plan.scenes[i - 1]
     srcs = {x.id: Path(x.path) if Path(x.path).is_absolute() else ROOT / x.path for x in plan.sources}
     kept = bool(st.session_state.get(f"sel:{path.name}:{i}", sc.selected))
-    mir = bool(st.session_state.get("look_mirror")) or bool(st.session_state.get(f"mir:{path.name}:{i}", False))
+    mir = bool(st.session_state.get(f"mir:{path.name}:{i}", False))
     st.markdown(f"**Scène {i}/{n}** · {sc.end - sc.start:.2f} s · " + (":green[✓ gardée]" if kept else ":red[✗ non gardée]")
                 + (" · :blue[**⇋ miroir**]" if mir else ""))
     st.caption(f"{sc.start:.2f} → {sc.end:.2f} s dans la source")
@@ -267,6 +267,12 @@ def on_invert() -> None:
     for i, sc in enumerate(load(path).scenes, 1):
         k = f"sel:{path.name}:{i}"
         st.session_state[k] = not bool(st.session_state.get(k, sc.selected))
+
+
+def on_mir_all(value: bool) -> None:
+    path = Path(st.session_state["plan_path"])
+    for i in range(1, len(load(path).scenes) + 1):
+        st.session_state[f"mir:{path.name}:{i}"] = value
 
 
 CLEAN_LABELS = {
@@ -479,10 +485,6 @@ def render_frame() -> tuple[dict, bool]:
         fmt = st.radio("Format", FORMATS, key="look_ratio", horizontal=True)
         if fmt != FORMATS[0]:
             kw["ratio"] = fmt
-    if st.checkbox("Miroir sur toutes les scènes", key="look_mirror"):
-        kw["mirror"] = True
-    st.caption("Miroir par scène : case « miroir » sur chaque vignette. Visible sur les vignettes et « ▶ voir », appliqué à l'export, "
-               "non conservé au rechargement de la page. Il inverse aussi les textes de la source.")
     return kw, none
 
 
@@ -578,21 +580,22 @@ def render_plan(plans: list[str]) -> None:
         st.info("Coche les scènes à garder (ou saisis des numéros), puis « Appliquer la sélection ».")
     else:
         st.info("Sélection enregistrée : clique « Approuver » pour débloquer l'export.")
-    t1, t2, t3, t4 = st.columns([1, 1, 1, 3])
+    nm = sum(1 for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
+    t1, t2, t3, t4 = st.columns([1, 1, 1, 3], vertical_alignment="center")
     t1.button("Tout cocher", on_click=on_all, args=(True,), use_container_width=True)
     t2.button("Tout décocher", on_click=on_all, args=(False,), use_container_width=True)
     t3.button("Inverser", on_click=on_invert, use_container_width=True)
     t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
+    m1, m2, _, m4 = st.columns([1, 1, 1, 3], vertical_alignment="center")
+    m1.button("Miroir : toutes", on_click=on_mir_all, args=(True,), use_container_width=True)
+    m2.button("Miroir : aucune", on_click=on_mir_all, args=(False,), use_container_width=True)
+    m4.caption(f"Miroir : {nm}/{len(flags)} · case « miroir » sur chaque vignette (inversée ici et dans « ▶ voir », "
+               "appliqué à l'export). Non conservé au rechargement. Inverse aussi les textes de la source.")
     with st.expander("Cadrage et format"):
         kw, none = render_frame()
-    gmir = bool(kw.get("mirror"))
-    if gmir:
-        st.markdown("<style>[class*='st-key-card_'] [data-testid='stImage'] img{transform:scaleX(-1)}"
-                    "[class*='st-key-card_']{border:2px solid #2563eb}</style>", unsafe_allow_html=True)
-    else:
-        mir = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
-        if mir:
-            kw["mirror_only"] = mir
+    mir = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
+    if mir:
+        kw["mirror_only"] = mir
     if none and len({sc.source_id for sc in plan.scenes if sc.selected}) > 1:
         st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
     kw.update(render_sound(plan))
@@ -639,16 +642,16 @@ def render_plan(plans: list[str]) -> None:
                 st.session_state[k] = sc.selected
             if km not in st.session_state:
                 st.session_state[km] = False
-            flip = gmir or bool(st.session_state[km])
+            flip = bool(st.session_state[km])
             st.caption(tag + f"**{i}** · {dur:.2f} s" + (f" :orange[**{flag}**]" if flag else "")
                        + (" · :blue[**⇋ miroir**]" if flip else ""))
-            g, v = st.columns([1, 1])
+            g, m = st.columns([1, 1])
             with g, st.container(key=f"keep_{i}"):
                 st.checkbox("garder", key=k)
-            if v.button("▶ voir", key=f"v:{pk}:{i}", use_container_width=True):
+            with m, st.container(key=f"mir_{i}"):
+                st.checkbox("miroir", key=km)
+            if st.button("▶ voir", key=f"v:{pk}:{i}", use_container_width=True):
                 st.session_state["pv"] = i
                 show_clip()
-            with st.container(key=f"mir_{i}"):
-                st.checkbox("miroir", key=km, disabled=gmir)
 
 main()

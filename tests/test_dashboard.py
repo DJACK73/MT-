@@ -237,13 +237,13 @@ class Dashboard(unittest.TestCase):
         self._ready(at)
         self.assertEqual(at.radio(key="look_ratio").options, ["Suivre le plan", "9:16", "16:9", "1:1"])
         at.radio(key="look_ratio").set_value("16:9").run()
-        at.checkbox(key="look_mirror").check().run()
+        _btn(at, "Miroir : toutes").click().run()
         with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
             _btn(at, "Exporter en clips séparés").click().run()
         self.assertEqual(len(at.exception), 0)
         self.assertEqual(len(at.error), 0)
         self.assertEqual(m.call_args.kwargs["look"], Look(
-            fit="bars", background="blur", anchor=0.5, ratio="16:9", mirror=True))
+            fit="bars", background="blur", anchor=0.5, ratio="16:9", mirror_only=frozenset({1, 2, 3})))
         self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
 
     def _mirs(self, at) -> list:
@@ -263,16 +263,19 @@ class Dashboard(unittest.TestCase):
             fit="bars", background="blur", anchor=0.5, mirror_only=frozenset({2})))
         self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
 
-    def test_miroir_global_prime(self) -> None:
+    def test_miroir_toutes_aucune(self) -> None:
         from mt_agent.export import Look, export_clips
         at = AppTest.from_file(str(APP), default_timeout=120).run()
         self._ready(at)
-        self._mirs(at)[0].check().run()
-        at.checkbox(key="look_mirror").check().run()
+        _btn(at, "Miroir : toutes").click().run()
+        self.assertEqual([c.value for c in self._mirs(at)], [True, True, True])
         with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
             _btn(at, "Exporter en clips séparés").click().run()
         self.assertEqual(len(at.exception), 0)
-        self.assertEqual(m.call_args.kwargs["look"], Look(fit="bars", background="blur", anchor=0.5, mirror=True))
+        self.assertEqual(m.call_args.kwargs["look"], Look(
+            fit="bars", background="blur", anchor=0.5, mirror_only=frozenset({1, 2, 3})))
+        _btn(at, "Miroir : aucune").click().run()
+        self.assertEqual([c.value for c in self._mirs(at)], [False, False, False])
 
     def test_miroir_independant_de_garder(self) -> None:
         at = AppTest.from_file(str(APP), default_timeout=60).run()
@@ -286,7 +289,7 @@ class Dashboard(unittest.TestCase):
         at.radio(key="look_fit").set_value("Aucun (source telle quelle)").run()
         self.assertEqual(len(at.exception), 0)
         self.assertEqual([r.key for r in at.radio if r.key == "look_ratio"], [])
-        self.assertEqual(self._keys(at, "checkbox", "look_"), ["look_mirror"])
+        self.assertEqual(self._keys(at, "checkbox", "look_"), [])
 
     def _scenes(self) -> list[list[tuple[float, float]]]:
         return [[(x.start, x.end) for x in Plan.model_validate_json(f.read_text()).scenes]
