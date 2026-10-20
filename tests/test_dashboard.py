@@ -246,11 +246,15 @@ class Dashboard(unittest.TestCase):
             fit="bars", background="blur", anchor=0.5, ratio="16:9", mirror=True))
         self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
 
+    def _mirs(self, at) -> list:
+        return [c for c in at.checkbox if str(c.key).startswith("mir:")]
+
     def test_miroir_par_scenes(self) -> None:
         from mt_agent.export import Look, export_clips
         at = AppTest.from_file(str(APP), default_timeout=120).run()
         self._ready(at)
-        at.text_input(key="look_mirror_spec").set_value("2").run()
+        self.assertEqual([c.value for c in self._mirs(at)], [False, False, False])
+        self._mirs(at)[1].check().run()
         with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
             _btn(at, "Exporter en clips séparés").click().run()
         self.assertEqual(len(at.exception), 0)
@@ -259,15 +263,23 @@ class Dashboard(unittest.TestCase):
             fit="bars", background="blur", anchor=0.5, mirror_only=frozenset({2})))
         self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
 
-    def test_miroir_scene_hors_limites(self) -> None:
-        from mt_agent.export import export_clips
+    def test_miroir_global_prime(self) -> None:
+        from mt_agent.export import Look, export_clips
         at = AppTest.from_file(str(APP), default_timeout=120).run()
         self._ready(at)
-        at.text_input(key="look_mirror_spec").set_value("99").run()
-        self.assertEqual(len(at.error), 1)
+        self._mirs(at)[0].check().run()
+        at.checkbox(key="look_mirror").check().run()
         with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
             _btn(at, "Exporter en clips séparés").click().run()
-        self.assertEqual(m.call_count, 0)
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(m.call_args.kwargs["look"], Look(fit="bars", background="blur", anchor=0.5, mirror=True))
+
+    def test_miroir_independant_de_garder(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=60).run()
+        self._mirs(at)[2].check().run()
+        for label in ("Tout cocher", "Tout décocher", "Inverser"):
+            _btn(at, label).click().run()
+            self.assertEqual([c.value for c in self._mirs(at)], [False, False, True], label)
 
     def test_aucun_masque_format(self) -> None:
         at = AppTest.from_file(str(APP), default_timeout=60).run()

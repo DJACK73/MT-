@@ -29,9 +29,12 @@ CSS = (
     "button[kind='primary'],[data-testid='stBaseButton-primary']{background-color:#16a34a;border-color:#16a34a;color:#fff}"
     "button[kind='primary']:hover,[data-testid='stBaseButton-primary']:hover{background-color:#15803d;border-color:#15803d;color:#fff}"
     "[class*='st-key-card_']{border-radius:12px;transition:all .15s}"
-    "[class*='st-key-card_']:has(input:checked){box-shadow:0 0 0 2px #16a34a;background:rgba(22,163,74,.10)}"
-    "[class*='st-key-card_']:has(input:not(:checked)){opacity:.55}"
-    "[class*='st-key-card_']:hover{opacity:1}"
+    "[class*='st-key-card_']:has([class*='st-key-keep_'] input:checked){box-shadow:0 0 0 2px #16a34a;background:rgba(22,163,74,.10)}"
+    "[class*='st-key-card_']:has([class*='st-key-keep_'] input:not(:checked)){opacity:.55}"
+    "[class*='st-key-card_']:has([class*='st-key-mir_'] input:checked){border:2px solid #2563eb}"
+    "[class*='st-key-card_']:has([class*='st-key-mir_'] input:checked) [data-testid='stImage'] img{transform:scaleX(-1)}"
+    "[class*='st-key-card_'] button{font-weight:600;border-radius:8px}"
+    "[class*='st-key-card_']:hover{opacity:1!important}"
     "</style>"
 )
 
@@ -125,11 +128,13 @@ def show_clip() -> None:
     sc = plan.scenes[i - 1]
     srcs = {x.id: Path(x.path) if Path(x.path).is_absolute() else ROOT / x.path for x in plan.sources}
     kept = bool(st.session_state.get(f"sel:{path.name}:{i}", sc.selected))
-    st.markdown(f"**Scène {i}/{n}** · {sc.end - sc.start:.2f} s · " + (":green[✓ gardée]" if kept else ":red[✗ non gardée]"))
+    mir = bool(st.session_state.get("look_mirror")) or bool(st.session_state.get(f"mir:{path.name}:{i}", False))
+    st.markdown(f"**Scène {i}/{n}** · {sc.end - sc.start:.2f} s · " + (":green[✓ gardée]" if kept else ":red[✗ non gardée]")
+                + (" · :blue[**⇋ miroir**]" if mir else ""))
     st.caption(f"{sc.start:.2f} → {sc.end:.2f} s dans la source")
     try:
         with st.spinner("Préparation de l'aperçu…"):
-            clip = preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT)
+            clip = preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT, mirror=mir)
         st.video(str(clip))
     except Exception as e:  # bord UI : afficher l'erreur sans planter la page
         st.error(f"Aperçu impossible : {e}")
@@ -456,8 +461,8 @@ def source_has_audio(plan: Plan) -> bool:
     return bool(paths) and all(_src_audio(str(q)) for q in paths)
 
 
-def render_frame(n: int) -> tuple[dict, bool, str]:
-    """Cadrage, fond, position, format, miroir : chaque réglage seulement s'il sert. Retourne (kwargs de Look, cadrage Aucun, erreur de saisie)."""
+def render_frame() -> tuple[dict, bool]:
+    """Cadrage, fond, position, format, miroir global : chaque réglage seulement s'il sert. Retourne (kwargs de Look, cadrage Aucun)."""
     fit = st.radio("Cadrage", ["Bandes (image entière)", "Plein cadre (recadré)", "Aucun (source telle quelle)"],
                    key="look_fit", horizontal=True)
     full, none = fit.startswith("Plein"), fit.startswith("Aucun")
@@ -474,18 +479,11 @@ def render_frame(n: int) -> tuple[dict, bool, str]:
         fmt = st.radio("Format", FORMATS, key="look_ratio", horizontal=True)
         if fmt != FORMATS[0]:
             kw["ratio"] = fmt
-    err = ""
     if st.checkbox("Miroir sur toutes les scènes", key="look_mirror"):
         kw["mirror"] = True
-    else:
-        spec = st.text_input("Miroir seulement sur ces scènes (ex. 3-5,8)", key="look_mirror_spec")
-        if spec.strip():
-            try:
-                kw["mirror_only"] = frozenset(parse_selection(spec, n))
-            except PlanError as ex:
-                err = str(ex)
-    st.caption("Appliqué à l'export, pas à l'aperçu. Le miroir inverse aussi les textes de la source.")
-    return kw, none, err
+    st.caption("Miroir par scène : case « miroir » sur chaque vignette. Visible sur les vignettes et « ▶ voir », appliqué à l'export, "
+               "non conservé au rechargement de la page. Il inverse aussi les textes de la source.")
+    return kw, none
 
 
 def render_sound(plan: Plan) -> dict:
@@ -586,9 +584,15 @@ def render_plan(plans: list[str]) -> None:
     t3.button("Inverser", on_click=on_invert, use_container_width=True)
     t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
     with st.expander("Cadrage et format"):
-        kw, none, err = render_frame(len(plan.scenes))
-    if err:
-        st.error(f"Miroir : {err}")
+        kw, none = render_frame()
+    gmir = bool(kw.get("mirror"))
+    if gmir:
+        st.markdown("<style>[class*='st-key-card_'] [data-testid='stImage'] img{transform:scaleX(-1)}"
+                    "[class*='st-key-card_']{border:2px solid #2563eb}</style>", unsafe_allow_html=True)
+    else:
+        mir = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
+        if mir:
+            kw["mirror_only"] = mir
     if none and len({sc.source_id for sc in plan.scenes if sc.selected}) > 1:
         st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
     kw.update(render_sound(plan))
@@ -604,9 +608,9 @@ def render_plan(plans: list[str]) -> None:
     go_clips = a4.button("Exporter en clips séparés", disabled=not approved or dirty, use_container_width=True)
     if approved and not dirty and not none:
         st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
-    if go_video and not err:
+    if go_video:
         _export_video(plan, look)
-    if go_clips and not err:
+    if go_clips:
         _export_clips(plan, look)
     with st.expander("Sélection par numéros (avancé)"):
         st.text_input("Sélection (ex. 1-5,8)", key="spec")
@@ -629,14 +633,22 @@ def render_plan(plans: list[str]) -> None:
             st.image(str(th))
             tag = (f":{COLORS[ids.index(sc.source_id) % len(COLORS)]}[**{letter(ids.index(sc.source_id))}**] · "
                    if len(ids) > 1 and sc.source_id in ids else "")
-            st.caption(tag + f"**{i}** · {dur:.2f} s" + (f" :orange[{flag}]" if flag else ""))
             k = f"sel:{pk}:{i}"
+            km = f"mir:{pk}:{i}"
             if k not in st.session_state:
                 st.session_state[k] = sc.selected
+            if km not in st.session_state:
+                st.session_state[km] = False
+            flip = gmir or bool(st.session_state[km])
+            st.caption(tag + f"**{i}** · {dur:.2f} s" + (f" :orange[**{flag}**]" if flag else "")
+                       + (" · :blue[**⇋ miroir**]" if flip else ""))
             g, v = st.columns([1, 1])
-            g.checkbox("garder", key=k)
+            with g, st.container(key=f"keep_{i}"):
+                st.checkbox("garder", key=k)
             if v.button("▶ voir", key=f"v:{pk}:{i}", use_container_width=True):
                 st.session_state["pv"] = i
                 show_clip()
+            with st.container(key=f"mir_{i}"):
+                st.checkbox("miroir", key=km, disabled=gmir)
 
 main()
