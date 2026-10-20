@@ -412,11 +412,18 @@ def render_compose(plans: list[str]) -> None:
             cols = st.columns(COLS)
             for n, (sc, th) in enumerate(zip(pl.scenes, thumbs), 1):
                 with cols[(n - 1) % COLS], st.container(border=True, key=f"cmpcard_{i}_{n}"):
-                    st.image(str(th))
+                    _show_thumb(th)
                     r = rank.get((p, n))
                     st.caption(f":{col}[**{letter(i)}·{n}**] · {sc.end - sc.start:.2f} s" + (f" · **ordre {r}**" if r else ""))
                     key = _ck(p, n)
                     st.checkbox("dans le montage", key=key, on_change=on_cmp_tick, args=(key, p, n))
+
+
+def _show_thumb(th: "Path | None") -> None:
+    if th is None:
+        st.caption("vignette indisponible")
+    else:
+        st.image(str(th))
 
 
 def _export_video(plan: Plan, look: Look) -> None:
@@ -633,7 +640,7 @@ def render_plan(plans: list[str]) -> None:
         with cols[(i - 1) % COLS], st.container(border=True, key=f"card_{i}"):
             dur = sc.end - sc.start
             flag = window_flag(dur, lo, hi)
-            st.image(str(th))
+            _show_thumb(th)
             tag = (f":{COLORS[ids.index(sc.source_id) % len(COLORS)]}[**{letter(ids.index(sc.source_id))}**] · "
                    if len(ids) > 1 and sc.source_id in ids else "")
             k = f"sel:{pk}:{i}"
