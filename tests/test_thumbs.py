@@ -48,10 +48,8 @@ class Thumbs(unittest.TestCase):
             plan = Plan(sources=[Source(id="a", path="inbox/s.mp4", duration=10.0)],
                         scenes=[Scene(source_id="a", start=0, end=3), Scene(source_id="a", start=3, end=6),
                                 Scene(source_id="a", start=6, end=10)])
-            calls: list[Path | None] = []
             def flaky(args, out=None, fmt="mp4", timeout=1800):
-                calls.append(out)
-                if len(calls) == 2: raise MediaError("boom")
+                if out is not None and out.name == "002.jpg": raise MediaError("boom")
                 return run_ffmpeg(args, out, fmt)
             with mock.patch("mt_agent.thumbs.run_ffmpeg", flaky):
                 th = make_thumbnails(plan, r)

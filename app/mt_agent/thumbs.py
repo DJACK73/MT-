@@ -1,5 +1,6 @@
 from __future__ import annotations
-import hashlib, json
+import hashlib, json, os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from .approval import PlanError
 from .ffx import MediaError, run_ffmpeg
@@ -16,18 +17,23 @@ def make_thumbnails(plan: Plan, root: Path, width: int = 320) -> list[Path | Non
     out_dir = ensure_outside_inbox(root / "workspace" / "thumbs" / thumbs_key(plan), root)
     out_dir.mkdir(parents=True, exist_ok=True)
     srcs = {s.id: (Path(s.path) if Path(s.path).is_absolute() else root / s.path) for s in plan.sources}
-    res: list[Path | None] = []
+    jobs: list[tuple[Path, float, Path]] = []
     for i, sc in enumerate(plan.scenes, 1):
         src = srcs.get(sc.source_id)
         if src is None or not src.is_file():
             raise PlanError(f"source absente: {sc.source_id}")
-        out = out_dir / f"{i:03d}.jpg"
+        jobs.append((src, (sc.start + sc.end) / 2, out_dir / f"{i:03d}.jpg"))
+
+    def one(job: tuple[Path, float, Path]) -> Path | None:
+        src, mid, out = job
         if not out.exists():
             try:
-                run_ffmpeg(["-ss", f"{(sc.start + sc.end) / 2:.3f}", "-i", str(src), "-frames:v", "1",
-                        "-vf", f"scale={width}:-2,format=yuvj420p", "-c:v", "mjpeg", "-q:v", "3", "-update", "1"],
-                       out, fmt="image2")
+                run_ffmpeg(["-ss", f"{mid:.3f}", "-i", str(src), "-frames:v", "1",
+                            "-vf", f"scale={width}:-2,format=yuvj420p", "-c:v", "mjpeg", "-q:v", "3", "-update", "1"],
+                           out, fmt="image2")
             except MediaError:
                 pass  # échec ou course : vignette absente = None, jamais d'exception
-        res.append(out if out.exists() else None)
-    return res
+        return out if out.exists() else None
+
+    with ThreadPoolExecutor(max_workers=max(1, min(4, os.cpu_count() or 1))) as ex:
+        return list(ex.map(one, jobs))  # map conserve l'ordre des scènes

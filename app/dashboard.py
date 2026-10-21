@@ -408,7 +408,8 @@ def render_compose(plans: list[str]) -> None:
         for i, (p, pl) in enumerate(zip(chosen, loaded)):
             col = COLORS[i % len(COLORS)]
             st.markdown(f"**:{col}[{letter(i)}]** · {plan_label(p)}")
-            thumbs = make_thumbnails(pl, ROOT)
+            with st.spinner("Vignettes…"):
+                thumbs = make_thumbnails(pl, ROOT)
             cols = st.columns(COLS)
             for n, (sc, th) in enumerate(zip(pl.scenes, thumbs), 1):
                 with cols[(n - 1) % COLS], st.container(border=True, key=f"cmpcard_{i}_{n}"):
@@ -625,7 +626,8 @@ def render_plan(plans: list[str]) -> None:
     with st.expander("Sélection par numéros (avancé)"):
         st.text_input("Sélection (ex. 1-5,8)", key="spec")
         st.caption("Si ce champ est rempli, il remplace les cases cochées.")
-    thumbs = make_thumbnails(plan, ROOT)
+    with st.spinner("Vignettes…"):
+        thumbs = make_thumbnails(plan, ROOT)
     if len(thumbs) != len(plan.scenes):
         st.warning(f"{len(thumbs)} vignettes pour {len(plan.scenes)} scènes")
     if mx is None and lo == MANUAL_MIN:
