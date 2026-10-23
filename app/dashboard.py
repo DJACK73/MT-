@@ -522,6 +522,13 @@ def render_sound(plan: Plan) -> dict:
             kw["music_start"] = float(m1.number_input("Début dans le morceau (s)", 0.0, 3600.0, 0.0, 1.0, key="snd_start"))
             kw["music_db"] = float(m2.slider("Volume de la musique (dB)", -40, 12, 0, key="snd_mdb"))
             kw["music_fade"] = round(float(m3.slider("Fondu (s)", 0.0, 0.5, 0.3, 0.05, key="snd_fade")), 2)
+            snap = st.checkbox("Caler les coupes sur les battements (vidéo assemblée)", key="snd_snap")
+            snapc = st.checkbox("Caler aussi chaque clip séparé (il finit sur un battement)", key="snd_snapc")
+            if snap or snapc:
+                kw["snap_beats"], kw["snap_clips"] = snap, snapc
+                kw["snap_lo"] = float(min(10.0, max(0.5, plan.options.min_scene_seconds)))
+                st.caption(f"Calage : une scène est raccourcie jusqu'à un battement, jamais sous {kw['snap_lo']:g} s ; "
+                           "sans battement dans la scène, elle ne change pas.")
         kw["audio"] = "none" if pick == "Sans audio" else "source" if src else "mix" if mix else "music"
         if pick != "Sans audio" and st.checkbox("Écho", key="snd_echo"):
             e1, e2 = st.columns(2)
@@ -529,6 +536,21 @@ def render_sound(plan: Plan) -> dict:
             kw["echo_ms"] = float(e1.slider("Retard (ms)", 20, 1000, 120, 10, key="snd_ems"))
             kw["echo_decay"] = min(0.7, round(float(e2.slider("Niveau", 0.05, 0.7, 0.3, 0.05, key="snd_edec")), 2))
     return kw
+
+
+def render_guide(has_plan: bool) -> None:
+    """Mini guide discret, fermé par défaut ; les lignes suivent l'état."""
+    mode = st.session_state.get("snd_mode", "Sans audio")
+    with st.expander("ℹ Guide"):
+        if not has_plan:
+            st.caption("Dépose une vidéo dans inbox/, puis lance la découpe dans ① Découper.")
+        else:
+            st.caption("① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Montage : "
+                       "coche les scènes, « Appliquer la sélection », « Approuver », puis exporte.")
+        st.caption("Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.")
+        if mode == "Musique ajoutée":
+            st.caption("Calage : la fin d'une scène recule jusqu'à un battement, jamais sous la durée minimale ; "
+                       "sans battement dans la scène, elle ne change pas.")
 
 
 def main() -> None:
@@ -539,6 +561,7 @@ def main() -> None:
     if flash:
         getattr(st, flash[0])(flash[1])
     plans = list_plans(PLANS)
+    render_guide(bool(plans))
     t_scan, t_cmp, t_plan = st.tabs(["① Découper", "② Composer", "③ Montage"])
     with t_scan:
         render_scan()

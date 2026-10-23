@@ -181,7 +181,7 @@ class Dashboard(unittest.TestCase):
             self.assertEqual(self._keys(at, kind, "snd_"), [], kind)
         at.radio(key="snd_mode").set_value("Musique ajoutée").run()
         self.assertEqual(len(at.exception), 0)
-        self.assertEqual(self._keys(at, "checkbox", "snd_"), ["snd_echo"])  # pas de mix : source muette
+        self.assertEqual(sorted(self._keys(at, "checkbox", "snd_")), ["snd_echo", "snd_snap", "snd_snapc"])  # pas de mix : source muette ; calage décoché en option
         self.assertEqual(sorted(self._keys(at, "slider", "snd_")), ["snd_fade", "snd_mdb"])
         self.assertEqual(self._keys(at, "selectbox", "snd_"), [])  # music/ absent ou vide
 
@@ -219,7 +219,7 @@ class Dashboard(unittest.TestCase):
         self.assertEqual(self._keys(at, "slider", "snd_"), ["snd_src_db"])
         self.assertEqual(self._keys(at, "checkbox", "snd_"), ["snd_echo"])  # pas de mix hors musique
         at.radio(key="snd_mode").set_value("Musique ajoutée").run()
-        self.assertEqual(sorted(self._keys(at, "checkbox", "snd_")), ["snd_echo", "snd_mix"])
+        self.assertEqual(sorted(self._keys(at, "checkbox", "snd_")), ["snd_echo", "snd_mix", "snd_snap", "snd_snapc"])
         at.radio(key="snd_mode").set_value("Audio de la source").run()
         with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
             _btn(at, "Exporter en clips séparés").click().run()

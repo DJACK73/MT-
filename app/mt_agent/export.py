@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from .paths import ensure_outside_inbox
+from .rhythm import analyse, loop_beats, snap_durations
 
 PROFILES: dict[str, tuple[int, int]] = {"youtube": (1920, 1080), "vertical": (1080, 1920)}
 _TAIL = "setsar=1,fps=25,format=yuv420p"
@@ -33,6 +34,9 @@ class Look:
     echo: bool = False  # écho sur l'audio final (exige un mode audio)
     echo_ms: float = 120.0  # retard de l'écho (ms), 20..1000
     echo_decay: float = 0.3  # niveau de l'écho, 0..0.7
+    snap_beats: bool = False  # fin de chaque scène calée sur un battement (ne raccourcit que) ; exige musique ou mix
+    snap_lo: float = 3.0  # durée minimale d'une scène calée (s)
+    snap_clips: bool = False  # chaque clip séparé finit sur un battement (ne raccourcit que) ; exige musique ou mix
 
 
 def _size(plan: Plan, look: Look | None) -> tuple[int, int]:
@@ -123,6 +127,50 @@ def _echo(look: Look | None) -> str:
     if not 0.0 < look.echo_decay <= 0.7:
         raise PlanError(f"niveau de l'écho hors de 0..0.7: {look.echo_decay}")
     return f"aecho=0.8:0.9:{look.echo_ms:g}:{look.echo_decay:g}"
+
+
+def _snap(plan: Plan, look: Look | None, root: Path) -> Plan:
+    """Copie du plan dont les fins de scènes sélectionnées sont raccourcies sur les battements. Jamais plus longues."""
+    if not (look and look.snap_beats):
+        return plan
+    if look.audio not in ("music", "mix"):
+        raise PlanError("calage sur les battements : choisir le mode musique ou mix")
+    if not 0.5 <= look.snap_lo <= 10.0:
+        raise PlanError(f"durée minimale du calage hors de 0.5..10 s: {look.snap_lo}")
+    _, mpath, mstart, _, _ = _music(look)
+    mfile = Path(mpath) if Path(mpath).is_absolute() else root / mpath
+    _check_music(mfile, mstart)
+    r = analyse(mfile, root / "workspace" / "rhythm")
+    if not r["beats"]:
+        raise PlanError("calage : rythme non fiable pour ce morceau")
+    durs = [s.end - s.start for s in plan.scenes if s.selected]
+    beats = loop_beats(r["beats"], r["length"], mstart, sum(durs))
+    it = iter(snap_durations(durs, beats, look.snap_lo))
+    out = []
+    for s in plan.scenes:
+        if s.selected:
+            e = next(it)
+            if e < s.end - s.start - 1e-9:
+                s = s.model_copy(update={"end": min(s.end, round(s.start + e, 3))})
+        out.append(s)
+    return plan.model_copy(update={"scenes": out})
+
+
+def _clip_snap(look: Look | None, root: Path, durs: list[float]) -> list[float]:
+    """Durées des clips séparés, chacun raccourci jusqu'à un battement (musique relancée à music_start). Jamais plus long."""
+    if not (look and look.snap_clips):
+        return durs
+    if look.audio not in ("music", "mix"):
+        raise PlanError("calage des clips : choisir le mode musique ou mix")
+    if not 0.5 <= look.snap_lo <= 10.0:
+        raise PlanError(f"durée minimale du calage hors de 0.5..10 s: {look.snap_lo}")
+    _, mpath, mstart, _, _ = _music(look)
+    mfile = Path(mpath) if Path(mpath).is_absolute() else root / mpath
+    _check_music(mfile, mstart)
+    r = analyse(mfile, root / "workspace" / "rhythm")
+    if not r["beats"]:
+        raise PlanError("calage : rythme non fiable pour ce morceau")
+    return [snap_durations([d], loop_beats(r["beats"], r["length"], mstart, d), look.snap_lo)[0] for d in durs]
 
 
 def _flip(look: Look | None, n: int) -> bool:
@@ -220,14 +268,15 @@ def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     """Rend un plan approuvé. Retourne (mp4, json du plan rendu). Ne remplace jamais rien."""
     assert_renderable(plan)
     ensure_outside_inbox(out_dir, root)
-    rels, fc = build_graph(plan, look)
+    eff = _snap(plan, look, root)
+    rels, fc = build_graph(eff, look)
     srcs = [Path(r) if Path(r).is_absolute() else root / r for r in rels]
     missing = [str(p) for p in srcs if not p.is_file()]
     if missing:
         raise PlanError(f"sources absentes: {missing}")
     with_a, _ = _audio(look)
     use_m, _, mstart, _, _ = _music(look)
-    total = sum(sc.end - sc.start for sc in plan.scenes if sc.selected)
+    total = sum(sc.end - sc.start for sc in eff.scenes if sc.selected)
     vsrcs = srcs[:-1] if use_m else srcs
     if use_m:
         _check_music(srcs[-1], mstart)
@@ -293,6 +342,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     if use_m:
         _check_music(mfile, mstart)
     _check_mirror(plan, look)
+    ends = _clip_snap(look, root, [sc.end - sc.start for _, sc in chosen])
     multi = len(plan.sources) > 1  # montage multi-vidéos : NNN-<lettre de la vidéo>.mp4
     lets = {s.id: letter(i) for i, s in enumerate(plan.sources)}
     stem = "montage" if multi else Path(paths[chosen[0][1].source_id]).stem
@@ -309,7 +359,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         raise PlanError(f"trop de dossiers existants: {out_dir / 'clips' / base}")
     done: list[Path] = []
     for k, (n, sc) in enumerate(chosen, 1):
-        d = sc.end - sc.start
+        d = ends[k - 1]
         node = _node(0, 0, 0.0, d, fr, w, h, bg, cx, _flip(look, n))
         args = ["-ss", f"{sc.start:.3f}", "-t", f"{d:.3f}", "-i", str(srcs[sc.source_id]),
                 "-filter_complex", node, "-map", "[v0]"]
