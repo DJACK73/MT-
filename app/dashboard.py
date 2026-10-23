@@ -622,6 +622,9 @@ def render_plan(plans: list[str]) -> None:
     m2.button("Miroir : aucune", on_click=on_mir_all, args=(False,), use_container_width=True)
     m4.caption(f"Miroir : {nm}/{len(flags)} · case « miroir » sur chaque vignette (inversée ici et dans « ▶ voir », "
                "appliqué à l'export). Non conservé au rechargement. Inverse aussi les textes de la source.")
+    with st.expander("Sélection par numéros (avancé)"):
+        st.text_input("Sélection (ex. 1-5,8)", key="spec")
+        st.caption("Si ce champ est rempli, il remplace les cases cochées.")
     with st.expander("Cadrage et format"):
         kw, none = render_frame()
     mir = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
@@ -646,9 +649,6 @@ def render_plan(plans: list[str]) -> None:
         _export_video(plan, look)
     if go_clips:
         _export_clips(plan, look)
-    with st.expander("Sélection par numéros (avancé)"):
-        st.text_input("Sélection (ex. 1-5,8)", key="spec")
-        st.caption("Si ce champ est rempli, il remplace les cases cochées.")
     with st.spinner("Vignettes…"):
         thumbs = make_thumbnails(plan, ROOT)
     if len(thumbs) != len(plan.scenes):
