@@ -35,6 +35,16 @@ CSS = (
     "[class*='st-key-card_']:has([class*='st-key-mir_'] input:checked) [data-testid='stImage'] img{transform:scaleX(-1)}"
     "[class*='st-key-card_'] button{font-weight:600;border-radius:8px}"
     "[class*='st-key-card_']:hover{opacity:1!important}"
+    "[class*='st-key-b_'] button,[class*='st-key-clean_'] button{border:0;border-radius:6px;color:#fff;font-weight:600}"
+    "[class*='st-key-b_'] button{min-width:9rem}"
+    "[class*='st-key-b_cb_'] button{background:#0d9488!important}"
+    "[class*='st-key-b_mir_'] button{background:#7c3aed!important}"
+    "[class*='st-key-b_ok'] button{background:#2563eb!important}"
+    "[class*='st-key-b_exp_'] button{background:#ea580c!important}"
+    "[class*='st-key-clean_'] button{background:#dc2626!important}"
+    "[class*='st-key-b_'] button:hover,[class*='st-key-clean_'] button:hover{filter:brightness(1.12);color:#fff}"
+    "[class*='st-key-b_']:has(button:disabled){opacity:.4}"
+    "[class*='st-key-b_'] button[kind='primary'],[class*='st-key-b_'] [data-testid='stBaseButton-primary']{box-shadow:0 0 0 2px rgba(255,255,255,.6)}"
     "</style>"
 )
 
@@ -139,9 +149,9 @@ def show_clip() -> None:
     except Exception as e:  # bord UI : afficher l'erreur sans planter la page
         st.error(f"Aperçu impossible : {e}")
     c1, c2 = st.columns(2)
-    c1.button("◀ Précédente", key="pv_prev", on_click=_pv_move, args=(-1, n), disabled=i <= 1, use_container_width=True)
-    c2.button("Suivante ▶", key="pv_next", on_click=_pv_move, args=(1, n), disabled=i >= n, use_container_width=True)
-    if st.button("OK, retour aux scènes", type="primary", key="pv_ok", use_container_width=True):
+    c1.button("◀ Précédente", key="pv_prev", on_click=_pv_move, args=(-1, n), disabled=i <= 1)
+    c2.button("Suivante ▶", key="pv_next", on_click=_pv_move, args=(1, n), disabled=i >= n)
+    if st.button("OK, retour aux scènes", type="primary", key="pv_ok"):
         st.rerun()
 
 
@@ -186,8 +196,8 @@ def render_scan() -> None:
             st.session_state["scan_lo"], st.session_state["scan_hi"] = lo_, hi_
 
         w1, w2, _ = st.columns([1, 1, 6])
-        w1.button("Fenêtre 3–4 s", on_click=_window, args=(3.0, 4.0), use_container_width=True)
-        w2.button("Fenêtre 3–5 s", on_click=_window, args=(3.0, 5.0), use_container_width=True)
+        w1.button("Fenêtre 3–4 s", on_click=_window, args=(3.0, 4.0))
+        w2.button("Fenêtre 3–5 s", on_click=_window, args=(3.0, 5.0))
     elif manual:
         text = st.text_area("Plages (une par ligne : début-fin)", key="scan_spans", height=120)
         st.caption("Ex. 12.5-16 · 1:02-1:08.5 · 40-fin. Secondes ou m:ss ; une plage par ligne, ou séparées par « ; » ou une virgule suivie d'un espace. "
@@ -205,12 +215,12 @@ def render_scan() -> None:
     batch_label = (f"Découper les {len(videos)} vidéos" if auto else f"Garder les {len(videos)} vidéos entières") if whole \
         else (f"Découper la sélection ({len(picked)})" if auto else f"Garder la sélection ({len(picked)})")
     if multi:
-        many = b1.button(batch_label, type="primary", disabled=not picked, use_container_width=True)
+        many = b1.button(batch_label, type="primary", disabled=not picked)
         one = False
     else:
         many = False
         one = b1.button("Découper" if auto else "Créer le plan" if manual else "Garder la vidéo entière",
-                        type="primary", use_container_width=True)
+                        type="primary")
     if not (one or many):
         return
     if auto and hi < lo:
@@ -304,11 +314,11 @@ def confirm_clean(level: int) -> None:
 
 
 def render_clean() -> None:
-    with st.expander("Nettoyage (à faire à la fin, après les exports)"):
+    with st.expander("Nettoyage (à faire à la fin, après les exports)", expanded=True):
         st.caption("Confirmation demandée. workspace/archive-* n'est jamais touché.")
         st.caption("Pour vider inbox/ : supprime les vidéos dans l'Explorateur Windows (inbox/ est en lecture seule ici).")
         for lvl, col in zip((1, 2), st.columns(2)):
-            if col.button(CLEAN_LABELS[lvl], key=f"clean_{lvl}", use_container_width=True):
+            if col.button(CLEAN_LABELS[lvl], key=f"clean_{lvl}"):
                 confirm_clean(lvl)
 
 
@@ -394,15 +404,15 @@ def render_compose(plans: list[str]) -> None:
             for k, (p, n) in enumerate(order):
                 sc = pl_of[p].scenes[n - 1]
                 c1, c2, c3, c4 = st.columns([1, 1, 1, 8])
-                c1.button("↑", key=f"cmp_up_{k}", on_click=on_cmp_move, args=(k, -1), disabled=k == 0, use_container_width=True)
-                c2.button("↓", key=f"cmp_dn_{k}", on_click=on_cmp_move, args=(k, 1), disabled=k == len(order) - 1, use_container_width=True)
-                c3.button("✕", key=f"cmp_rm_{k}", on_click=on_cmp_drop, args=(k,), use_container_width=True)
+                c1.button("↑", key=f"cmp_up_{k}", on_click=on_cmp_move, args=(k, -1), disabled=k == 0)
+                c2.button("↓", key=f"cmp_dn_{k}", on_click=on_cmp_move, args=(k, 1), disabled=k == len(order) - 1)
+                c3.button("✕", key=f"cmp_rm_{k}", on_click=on_cmp_drop, args=(k,))
                 c4.write(f"{k + 1}. {letter(idx[p])}·{n} · {sc.end - sc.start:.2f} s")
             total = sum(pl_of[p].scenes[n - 1].end - pl_of[p].scenes[n - 1].start for p, n in order)
             st.caption(f"{len(order)} scène(s) · {total:.1f} s")
             b1, b2, _ = st.columns([1.4, 1, 5])
-            b1.button("Composer le montage", key="cmp_go", type="primary", on_click=on_compose, use_container_width=True)
-            b2.button("Vider l'ordre", key="cmp_clear", on_click=on_cmp_clear, use_container_width=True)
+            b1.button("Composer le montage", key="cmp_go", type="primary", on_click=on_compose)
+            b2.button("Vider l'ordre", key="cmp_clear", on_click=on_cmp_clear)
         else:
             st.caption("Aucune scène choisie : coche « dans le montage » sur les vignettes.")
         for i, (p, pl) in enumerate(zip(chosen, loaded)):
@@ -514,7 +524,7 @@ def render_sound(plan: Plan) -> dict:
         if mus:
             files = list_music(MUSIC_DIR)
             if files:
-                name = st.selectbox("Fichier (music/)", files, key="snd_file")
+                name = st.radio("Fichier (music/)", files, key="snd_file")
                 kw["music"] = f"music/{name}"
             else:
                 st.caption("music/ est vide : dépose un fichier audio dans l'Explorateur, puis recharge la page.")
@@ -562,7 +572,7 @@ def main() -> None:
         getattr(st, flash[0])(flash[1])
     plans = list_plans(PLANS)
     render_guide(bool(plans))
-    t_scan, t_cmp, t_plan = st.tabs(["① Découper", "② Composer", "③ Montage"])
+    t_scan, t_cmp, t_plan, t_clean = st.tabs(["① Découper", "② Composer", "③ Montage", "④ Nettoyage"])
     with t_scan:
         render_scan()
     with t_cmp:
@@ -572,7 +582,8 @@ def main() -> None:
             render_plan(plans)
         else:
             st.info("Aucun plan pour l'instant : découpe une vidéo dans l'onglet ①.")
-    render_clean()
+    with t_clean:
+        render_clean()
 
 
 def render_plan(plans: list[str]) -> None:
@@ -613,13 +624,13 @@ def render_plan(plans: list[str]) -> None:
         st.info("Sélection enregistrée : clique « Approuver » pour débloquer l'export.")
     nm = sum(1 for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
     t1, t2, t3, t4 = st.columns([1, 1, 1, 3], vertical_alignment="center")
-    t1.button("Tout cocher", on_click=on_all, args=(True,), use_container_width=True)
-    t2.button("Tout décocher", on_click=on_all, args=(False,), use_container_width=True)
-    t3.button("Inverser", on_click=on_invert, use_container_width=True)
+    t1.button("Tout cocher", key="b_cb_all", on_click=on_all, args=(True,))
+    t2.button("Tout décocher", key="b_cb_none", on_click=on_all, args=(False,))
+    t3.button("Inverser", key="b_cb_inv", on_click=on_invert)
     t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
     m1, m2, _, m4 = st.columns([1, 1, 1, 3], vertical_alignment="center")
-    m1.button("Miroir : toutes", on_click=on_mir_all, args=(True,), use_container_width=True)
-    m2.button("Miroir : aucune", on_click=on_mir_all, args=(False,), use_container_width=True)
+    m1.button("Miroir : toutes", key="b_mir_all", on_click=on_mir_all, args=(True,))
+    m2.button("Miroir : aucune", key="b_mir_none", on_click=on_mir_all, args=(False,))
     m4.caption(f"Miroir : {nm}/{len(flags)} · case « miroir » sur chaque vignette (inversée ici et dans « ▶ voir », "
                "appliqué à l'export). Non conservé au rechargement. Inverse aussi les textes de la source.")
     with st.expander("Sélection par numéros (avancé)"):
@@ -636,13 +647,13 @@ def render_plan(plans: list[str]) -> None:
     look = Look(**kw)
     a1, a2, a3, a4 = st.columns(4)
     a1.button("Appliquer la sélection", on_click=on_select,
-              type="primary" if dirty else "secondary", use_container_width=True)
-    a2.button("Approuver", on_click=on_approve,
+              type="primary" if dirty else "secondary")
+    a2.button("Approuver", key="b_ok", on_click=on_approve,
               type="primary" if pending and not dirty and any(saved) else "secondary",
-              disabled=not pending or dirty or not any(saved), use_container_width=True)
-    go_video = a3.button("Exporter la vidéo assemblée", type="primary" if approved and not dirty else "secondary",
-                         disabled=not approved or dirty, use_container_width=True)
-    go_clips = a4.button("Exporter en clips séparés", disabled=not approved or dirty, use_container_width=True)
+              disabled=not pending or dirty or not any(saved))
+    go_video = a3.button("Exporter la vidéo assemblée", key="b_exp_video", type="primary" if approved and not dirty else "secondary",
+                         disabled=not approved or dirty)
+    go_clips = a4.button("Exporter en clips séparés", key="b_exp_clips", disabled=not approved or dirty)
     if approved and not dirty and not none:
         st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
     if go_video:
@@ -682,7 +693,7 @@ def render_plan(plans: list[str]) -> None:
                 st.checkbox("garder", key=k)
             with m, st.container(key=f"mir_{i}"):
                 st.checkbox("miroir", key=km)
-            if st.button("▶ voir", key=f"v:{pk}:{i}", use_container_width=True):
+            if st.button("▶ voir", key=f"v:{pk}:{i}"):
                 st.session_state["pv"] = i
                 show_clip()
 

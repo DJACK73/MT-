@@ -192,7 +192,7 @@ class Dashboard(unittest.TestCase):
         at = AppTest.from_file(str(APP), default_timeout=120).run()
         self._ready(at)
         at.radio(key="snd_mode").set_value("Musique ajoutée").run()
-        self.assertEqual(at.selectbox(key="snd_file").options, ["m.wav"])
+        self.assertEqual(at.radio(key="snd_file").options, ["m.wav"])
         self.assertEqual(self._keys(at, "slider", "snd_e"), [])  # écho masqué tant que décoché
         at.checkbox(key="snd_echo").check().run()
         self.assertEqual(sorted(self._keys(at, "slider", "snd_e")), ["snd_edec", "snd_ems"])
