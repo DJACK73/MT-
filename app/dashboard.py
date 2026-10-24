@@ -45,6 +45,13 @@ CSS = (
     "[class*='st-key-b_'] button:hover,[class*='st-key-clean_'] button:hover{filter:brightness(1.12);color:#fff}"
     "[class*='st-key-b_']:has(button:disabled){opacity:.4}"
     "[class*='st-key-b_'] button[kind='primary'],[class*='st-key-b_'] [data-testid='stBaseButton-primary']{box-shadow:0 0 0 2px rgba(255,255,255,.6)}"
+    "[class*='st-key-b_win_'] button{background:#0d9488!important}"
+    "[class*='st-key-cmp_go'] button,[class*='st-key-cmp_clear'] button,[class*='st-key-cmp_up_'] button,[class*='st-key-cmp_dn_'] button,[class*='st-key-cmp_rm_'] button{border:0;border-radius:6px;color:#fff;font-weight:600}"
+    "[class*='st-key-cmp_go'] button{background:#16a34a!important;min-width:9rem}"
+    "[class*='st-key-cmp_clear'] button{background:#dc2626!important;min-width:7rem}"
+    "[class*='st-key-cmp_up_'] button,[class*='st-key-cmp_dn_'] button{background:#2563eb!important;min-width:2.5rem}"
+    "[class*='st-key-cmp_rm_'] button{background:#dc2626!important;min-width:2.5rem}"
+    "[class*='st-key-cmp_go'] button:hover,[class*='st-key-cmp_clear'] button:hover,[class*='st-key-cmp_up_'] button:hover,[class*='st-key-cmp_dn_'] button:hover,[class*='st-key-cmp_rm_'] button:hover{filter:brightness(1.12);color:#fff}"
     "</style>"
 )
 
@@ -196,8 +203,8 @@ def render_scan() -> None:
             st.session_state["scan_lo"], st.session_state["scan_hi"] = lo_, hi_
 
         w1, w2, _ = st.columns([1, 1, 6])
-        w1.button("Fenêtre 3–4 s", on_click=_window, args=(3.0, 4.0))
-        w2.button("Fenêtre 3–5 s", on_click=_window, args=(3.0, 5.0))
+        w1.button("Fenêtre 3–4 s", key="b_win_a", on_click=_window, args=(3.0, 4.0))
+        w2.button("Fenêtre 3–5 s", key="b_win_b", on_click=_window, args=(3.0, 5.0))
     elif manual:
         text = st.text_area("Plages (une par ligne : début-fin)", key="scan_spans", height=120)
         st.caption("Ex. 12.5-16 · 1:02-1:08.5 · 40-fin. Secondes ou m:ss ; une plage par ligne, ou séparées par « ; » ou une virgule suivie d'un espace. "
@@ -215,11 +222,11 @@ def render_scan() -> None:
     batch_label = (f"Découper les {len(videos)} vidéos" if auto else f"Garder les {len(videos)} vidéos entières") if whole \
         else (f"Découper la sélection ({len(picked)})" if auto else f"Garder la sélection ({len(picked)})")
     if multi:
-        many = b1.button(batch_label, type="primary", disabled=not picked)
+        many = b1.button(batch_label, key="b_scan_many", type="primary", disabled=not picked)
         one = False
     else:
         many = False
-        one = b1.button("Découper" if auto else "Créer le plan" if manual else "Garder la vidéo entière",
+        one = b1.button("Découper" if auto else "Créer le plan" if manual else "Garder la vidéo entière", key="b_scan_one",
                         type="primary")
     if not (one or many):
         return
