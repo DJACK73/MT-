@@ -25,7 +25,7 @@ VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"}
 COLS = 5
 STATUS_FR = {"pending_human_review": "À valider", "approved": "Approuvé", "rendered": "Rendu"}
 CSS = (
-    "<style>.block-container{padding-top:1.5rem}"
+    "<style>.block-container{padding-top:4rem}"
     "[data-testid='stImage'] img{border-radius:8px}"
     "button[kind='primary'],[data-testid='stBaseButton-primary']{background-color:#16a34a;border-color:#16a34a;color:#fff}"
     "button[kind='primary']:hover,[data-testid='stBaseButton-primary']:hover{background-color:#15803d;border-color:#15803d;color:#fff}"
@@ -53,6 +53,13 @@ CSS = (
     "[class*='st-key-cmp_up_'] button,[class*='st-key-cmp_dn_'] button{background:#2563eb!important;min-width:2.5rem}"
     "[class*='st-key-cmp_rm_'] button{background:#dc2626!important;min-width:2.5rem}"
     "[class*='st-key-cmp_go'] button:hover,[class*='st-key-cmp_clear'] button:hover,[class*='st-key-cmp_up_'] button:hover,[class*='st-key-cmp_dn_'] button:hover,[class*='st-key-cmp_rm_'] button:hover{filter:brightness(1.12);color:#fff}"
+    "[data-testid='stMetric']{padding:.35rem .8rem}"
+    "[data-testid='stMetricValue']{font-size:1.4rem}"
+    "[data-testid='stMetricLabel'] p{font-size:.75rem}"
+    "[data-testid='stPopoverBody']{min-width:min(640px,92vw);max-width:92vw}"
+    ".st-key-pop_guide button{background:#0e1117;border:1px solid #0ea5e980;color:#0ea5e9;border-radius:12px;min-height:2.2rem;font-weight:600}"
+    ".st-key-pop_guide button:hover{border-color:#0ea5e9}"
+    ".st-key-pop_guide button p{color:inherit;font-size:.9rem}"
     "</style>"
 )
 
@@ -594,7 +601,7 @@ def _sound_recap(kw: dict) -> str:
 def render_guide(has_plan: bool) -> None:
     """Mini guide discret, fermé par défaut ; les lignes suivent l'état."""
     mode = st.session_state.get("snd_mode", "Sans audio")
-    with st.expander("ℹ Guide"):
+    with st.container():
         if not has_plan:
             st.caption("Dépose une vidéo dans inbox/, puis lance la découpe dans ① Découper.")
         else:
@@ -609,14 +616,16 @@ def render_guide(has_plan: bool) -> None:
 def main() -> None:
     st.set_page_config(page_title="MT", page_icon="🎬", layout="wide")
     st.markdown(CSS, unsafe_allow_html=True)
-    st.title("🎬 MT · Montage")
+    _t, _g = st.columns([5, 1.4], vertical_alignment="center")
+    _t.markdown("#### 🎬 MT · Montage")
+    with _g.popover("ℹ Guide", key="pop_guide", width="stretch"):
+        render_guide(bool(list_plans(PLANS)))
     flash = st.session_state.pop("flash", None)
     if flash:
         getattr(st, flash[0])(flash[1])
     plans = list_plans(PLANS)
     fresh = [q for q in st.session_state.get("last_cut", []) if q in plans]
     plans = fresh + [q for q in plans if q not in fresh]
-    render_guide(bool(plans))
     t_scan, t_cmp, t_plan, t_clean = st.tabs(["① Découper", "② Composer", "③ Montage", "④ Nettoyage"])
     with t_scan:
         render_scan()
@@ -644,9 +653,9 @@ def render_plan(plans: list[str]) -> None:
     approved = is_approved(plan)
     kept = sum(s.end - s.start for s in plan.scenes if s.selected)
     c1, c2, c3 = st.columns(3)
-    c1.metric("Statut", STATUS_FR[plan.status])
-    c2.metric("Scènes", f"{sum(saved)}/{len(saved)}")
-    c3.metric("Durée retenue", f"{kept:.1f} s")
+    c1.metric("Statut", STATUS_FR[plan.status], border=True)
+    c2.metric("Scènes", f"{sum(saved)}/{len(saved)}", border=True)
+    c3.metric("Durée retenue", f"{kept:.1f} s", border=True)
     saved_any = any(saved)
     lo = plan.options.min_scene_seconds
     mx = plan.options.max_scene_seconds
