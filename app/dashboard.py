@@ -676,41 +676,47 @@ def render_plan(plans: list[str]) -> None:
         st.info("Coche les scènes à garder (ou saisis des numéros), puis « Appliquer la sélection ».")
     else:
         st.info("Sélection enregistrée : clique « Approuver » pour débloquer l'export.")
-    nm = sum(1 for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
-    t1, t2, t3, t4 = st.columns([1, 1, 1, 3], vertical_alignment="center")
-    t1.button("Tout cocher", key="b_cb_all", on_click=on_all, args=(True,))
-    t2.button("Tout décocher", key="b_cb_none", on_click=on_all, args=(False,))
-    t3.button("Inverser", key="b_cb_inv", on_click=on_invert)
-    t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
-    m1, m2, _, m4 = st.columns([1, 1, 1, 3], vertical_alignment="center")
-    m1.button("Miroir : toutes", key="b_mir_all", on_click=on_mir_all, args=(True,))
-    m2.button("Miroir : aucune", key="b_mir_none", on_click=on_mir_all, args=(False,))
-    m4.caption(f"Miroir : {nm}/{len(flags)} · case « miroir » sur chaque vignette (inversée ici et dans « ▶ voir », "
-               "appliqué à l'export). Non conservé au rechargement. Inverse aussi les textes de la source.")
-    with st.expander("Sélection par numéros (avancé)"):
-        st.text_input("Sélection (ex. 1-5,8)", key="spec")
-        st.caption("Si ce champ est rempli, il remplace les cases cochées.")
-    with st.expander("Cadrage et format"):
-        kw, none = render_frame()
-    mir = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
-    if mir:
-        kw["mirror_only"] = mir
-    if none and len({sc.source_id for sc in plan.scenes if sc.selected}) > 1:
-        st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
-    kw.update(render_sound(plan))
-    look = Look(**kw)
-    st.caption(_sound_recap(kw))
-    a1, a2, a3, a4 = st.columns(4)
-    a1.button("Appliquer la sélection", on_click=on_select,
-              type="primary" if dirty else "secondary")
-    a2.button("Approuver", key="b_ok", on_click=on_approve,
-              type="primary" if pending and not dirty and any(saved) else "secondary",
-              disabled=not pending or dirty or not any(saved))
-    go_video = a3.button("Exporter la vidéo assemblée", key="b_exp_video", type="primary" if approved and not dirty else "secondary",
-                         disabled=not approved or dirty)
-    go_clips = a4.button("Exporter en clips séparés", key="b_exp_clips", disabled=not approved or dirty)
-    if approved and not dirty and not none:
-        st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
+    with st.container(border=True):
+        st.markdown("**Sélection**")
+        nm = sum(1 for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
+        t1, t2, t3, t4 = st.columns([1, 1, 1, 3], vertical_alignment="center")
+        t1.button("Tout cocher", key="b_cb_all", on_click=on_all, args=(True,))
+        t2.button("Tout décocher", key="b_cb_none", on_click=on_all, args=(False,))
+        t3.button("Inverser", key="b_cb_inv", on_click=on_invert)
+        t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
+        m1, m2, _, m4 = st.columns([1, 1, 1, 3], vertical_alignment="center")
+        m1.button("Miroir : toutes", key="b_mir_all", on_click=on_mir_all, args=(True,))
+        m2.button("Miroir : aucune", key="b_mir_none", on_click=on_mir_all, args=(False,))
+        m4.caption(f"Miroir : {nm}/{len(flags)} · case « miroir » sur chaque vignette (inversée ici et dans « ▶ voir », "
+                   "appliqué à l'export). Non conservé au rechargement. Inverse aussi les textes de la source.")
+        with st.expander("Sélection par numéros (avancé)"):
+            st.text_input("Sélection (ex. 1-5,8)", key="spec")
+            st.caption("Si ce champ est rempli, il remplace les cases cochées.")
+    with st.container(border=True):
+        st.markdown("**Réglages**")
+        with st.expander("Cadrage et format"):
+            kw, none = render_frame()
+        mir = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
+        if mir:
+            kw["mirror_only"] = mir
+        if none and len({sc.source_id for sc in plan.scenes if sc.selected}) > 1:
+            st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
+        kw.update(render_sound(plan))
+        look = Look(**kw)
+    with st.container(border=True):
+        st.markdown("**Actions**")
+        st.caption(_sound_recap(kw))
+        a1, a2, a3, a4 = st.columns(4)
+        a1.button("Appliquer la sélection", on_click=on_select,
+                  type="primary" if dirty else "secondary")
+        a2.button("Approuver", key="b_ok", on_click=on_approve,
+                  type="primary" if pending and not dirty and any(saved) else "secondary",
+                  disabled=not pending or dirty or not any(saved))
+        go_video = a3.button("Exporter la vidéo assemblée", key="b_exp_video", type="primary" if approved and not dirty else "secondary",
+                             disabled=not approved or dirty)
+        go_clips = a4.button("Exporter en clips séparés", key="b_exp_clips", disabled=not approved or dirty)
+        if approved and not dirty and not none:
+            st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
     if go_video:
         _export_video(plan, look)
     if go_clips:
