@@ -632,7 +632,7 @@ def _sound_recap(kw: dict) -> str:
 
 
 def render_guide(has_plan: bool) -> None:
-    """Mini guide discret, fermé par défaut ; les lignes suivent l'état."""
+    """Contenu du popover « ℹ Guide » ; les lignes suivent l'état."""
     mode = st.session_state.get("snd_mode", "Sans audio")
     with st.container():
         if not has_plan:
@@ -640,6 +640,7 @@ def render_guide(has_plan: bool) -> None:
         else:
             st.caption("① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Montage : "
                        "coche les scènes, « Appliquer la sélection », « Approuver », puis exporte.")
+        st.caption("③ est rangé en trois blocs : **Sélection** (cases, miroir) → **Réglages** (cadrage, son) → **Actions** (récap du son, appliquer, approuver, exporter).")
         st.caption("Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.")
         if mode == "Musique ajoutée":
             st.caption("Calage : la fin d'une scène recule jusqu'à un battement, jamais sous la durée minimale ; "
