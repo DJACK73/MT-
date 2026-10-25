@@ -586,10 +586,6 @@ def render_sound(plan: Plan) -> dict:
                 kw["music"] = f"music/{name}"
             else:
                 st.caption("music/ est vide : dépose un fichier audio dans l'Explorateur, puis recharge la page.")
-            m1, m2, m3 = st.columns(3)
-            kw["music_start"] = float(m1.number_input("Début dans le morceau (s)", 0.0, 3600.0, 0.0, 1.0, key="snd_start"))
-            kw["music_db"] = float(m2.slider("Volume de la musique (dB)", -40, 12, 0, key="snd_mdb"))
-            kw["music_fade"] = round(float(m3.slider("Fondu (s)", 0.0, 0.5, 0.3, 0.05, key="snd_fade")), 2)
             snap = st.checkbox("Caler les coupes sur les battements (vidéo assemblée)", key="snd_snap")
             snapc = st.checkbox("Caler aussi chaque clip séparé (il finit sur un battement)", key="snd_snapc")
             if snap or snapc:
@@ -597,6 +593,10 @@ def render_sound(plan: Plan) -> dict:
                 kw["snap_lo"] = float(min(10.0, max(0.5, plan.options.min_scene_seconds)))
                 st.caption(f"Calage : une scène est raccourcie jusqu'à un battement, jamais sous {kw['snap_lo']:g} s ; "
                            "sans battement dans la scène, elle ne change pas.")
+            m1, m2, m3 = st.columns(3)
+            kw["music_start"] = float(m1.number_input("Début dans le morceau (s)", 0.0, 3600.0, 0.0, 1.0, key="snd_start"))
+            kw["music_db"] = float(m2.slider("Volume de la musique (dB)", -40, 12, 0, key="snd_mdb"))
+            kw["music_fade"] = round(float(m3.slider("Fondu (s)", 0.0, 0.5, 0.3, 0.05, key="snd_fade")), 2)
         kw["audio"] = "none" if pick == "Sans audio" else "source" if src else "mix" if mix else "music"
         if pick != "Sans audio" and st.checkbox("Écho", key="snd_echo"):
             e1, e2 = st.columns(2)
