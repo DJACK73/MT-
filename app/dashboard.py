@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime
 from pathlib import Path
 import streamlit as st
 from pydantic import ValidationError
@@ -97,10 +98,13 @@ def _flags(plan: Plan, pk: str) -> list[bool]:
     return [bool(st.session_state.get(f"sel:{pk}:{i}", sc.selected)) for i, sc in enumerate(plan.scenes, 1)]
 
 
-def plan_label(p: str) -> str:
+def plan_label(p: str, mark: bool = True) -> str:
     pl = load(Path(p))
     stem = " + ".join(Path(s.path).stem for s in pl.sources) or "?"
-    return f"{STATUS_FR[pl.status]} · {stem} · {sum(s.selected for s in pl.scenes)}/{len(pl.scenes)} scènes · {Path(p).name[:8]}"
+    when = datetime.fromtimestamp(Path(p).stat().st_mtime).strftime("%d/%m %H:%M")
+    new = "🆕 " if mark and p in st.session_state.get("last_cut", []) else ""
+    return (f"{new}{STATUS_FR[pl.status]} · {stem} · {sum(s.selected for s in pl.scenes)}/{len(pl.scenes)} scènes"
+            f" · {when} · {Path(p).name[:8]}")
 
 
 def on_select() -> None:
@@ -240,6 +244,7 @@ def render_scan() -> None:
     made: list[int] = []
     existed = 0
     errors: list[str] = []
+    cut: list[str] = []
     last: Path | None = None
     for k, name in enumerate(targets, 1):
         bar.progress((k - 1) / len(targets), text=f"Découpe {k}/{len(targets)} : {name}")
@@ -256,11 +261,14 @@ def render_scan() -> None:
             else:
                 last = save_plan(plan, PLANS)
                 made.append(len(plan.scenes))
+            cut.append(str(last))
         except ERRORS as e:
             errors.append(f"{name}: {e}")
     bar.empty()
     if last is not None:
         st.session_state["plan_path"] = str(last)
+    if cut:
+        st.session_state["last_cut"] = cut
     parts: list[str] = []
     if made:
         tag = f" (fenêtre {lo:g}–{hi:g} s)" if auto else ""
@@ -555,6 +563,34 @@ def render_sound(plan: Plan) -> dict:
     return kw
 
 
+def _sound_recap(kw: dict) -> str:
+    """Une ligne : le son qui sera appliqué à l'export (ou son absence)."""
+    a = kw.get("audio", "none")
+    if a == "none":
+        return "🔇 Son : aucun (« Sans audio »)"
+    name = Path(kw["music"]).name if kw.get("music") else ""
+    if a in ("music", "mix") and not name:
+        return "⚠ Son : musique choisie mais aucun fichier dans music/ : l'export sera sans musique"
+    bits: list[str] = []
+    if a == "source":
+        bits.append("audio de la source")
+    elif a == "mix":
+        bits.append(f"musique {name} sous la source")
+    else:
+        bits.append(f"musique {name}")
+    if a in ("music", "mix"):
+        bits += [f"début {kw.get('music_start', 0.0):g} s", f"{kw.get('music_db', 0.0):+g} dB"]
+    if a in ("source", "mix"):
+        bits.append(f"source {kw.get('audio_db', 0.0):+g} dB")
+    if kw.get("snap_beats"):
+        bits.append("calage assemblé")
+    if kw.get("snap_clips"):
+        bits.append("calage clips")
+    if kw.get("echo"):
+        bits.append("écho")
+    return "🔊 Son : " + " · ".join(bits)
+
+
 def render_guide(has_plan: bool) -> None:
     """Mini guide discret, fermé par défaut ; les lignes suivent l'état."""
     mode = st.session_state.get("snd_mode", "Sans audio")
@@ -578,6 +614,8 @@ def main() -> None:
     if flash:
         getattr(st, flash[0])(flash[1])
     plans = list_plans(PLANS)
+    fresh = [q for q in st.session_state.get("last_cut", []) if q in plans]
+    plans = fresh + [q for q in plans if q not in fresh]
     render_guide(bool(plans))
     t_scan, t_cmp, t_plan, t_clean = st.tabs(["① Découper", "② Composer", "③ Montage", "④ Nettoyage"])
     with t_scan:
@@ -594,7 +632,7 @@ def main() -> None:
 
 
 def render_plan(plans: list[str]) -> None:
-    st.selectbox("Plan à monter", plans, key="plan_path", format_func=plan_label)
+    st.selectbox("Plan à monter", plans, key="plan_path", format_func=lambda q: plan_label(q, mark=False))
     path = Path(st.session_state["plan_path"])
     plan = load(path)
     pk = path.name
@@ -652,6 +690,7 @@ def render_plan(plans: list[str]) -> None:
         st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
     kw.update(render_sound(plan))
     look = Look(**kw)
+    st.caption(_sound_recap(kw))
     a1, a2, a3, a4 = st.columns(4)
     a1.button("Appliquer la sélection", on_click=on_select,
               type="primary" if dirty else "secondary")
