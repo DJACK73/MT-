@@ -81,7 +81,11 @@ CSS = (
     "[class*='st-key-cmp_rm_'] button:hover{border-color:#dc2626}"
     "[class*='st-key-cmp_rm_'] button p{color:inherit}"
     "[class*='st-key-cmp_rm_'] button[data-testid='stBaseButton-primary']{background:#dc2626!important;border-color:#dc2626;color:#fff!important}"
-    "[class*='st-key-b_']:has(button:disabled){opacity:.4}"
+    "[class*='st-key-b_apply'] button{background:#0e1117!important;border:1px solid #0ea5e980;color:#0ea5e9!important;border-radius:12px;font-weight:600}"
+    "[class*='st-key-b_apply'] button:hover{border-color:#0ea5e9}"
+    "[class*='st-key-b_apply'] button p{color:inherit}"
+    "[class*='st-key-b_apply'] button[data-testid='stBaseButton-primary']{background:#0ea5e9!important;border-color:#0ea5e9;color:#fff!important}"
+    "[class*='st-key-b_']:has(button:disabled){opacity:.6}"
     "[data-testid='stMetric']{padding:.35rem .8rem}"
     "[data-testid='stMetricValue']{font-size:1.4rem}"
     "[data-testid='stMetricLabel'] p{font-size:.75rem}"
@@ -736,7 +740,7 @@ def render_plan(plans: list[str]) -> None:
         st.markdown("**Actions**")
         st.caption(_sound_recap(kw))
         a1, a2, a3, a4 = st.columns(4)
-        a1.button("Appliquer la sélection", on_click=on_select,
+        a1.button("Appliquer la sélection", key="b_apply", on_click=on_select,
                   type="primary" if dirty else "secondary")
         a2.button("Approuver", key="b_ok", on_click=on_approve,
                   type="primary" if pending and not dirty and any(saved) else "secondary",
