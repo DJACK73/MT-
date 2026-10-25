@@ -85,6 +85,9 @@ CSS = (
     "[class*='st-key-b_apply'] button:hover{border-color:#0ea5e9}"
     "[class*='st-key-b_apply'] button p{color:inherit}"
     "[class*='st-key-b_apply'] button[data-testid='stBaseButton-primary']{background:#0ea5e9!important;border-color:#0ea5e9;color:#fff!important}"
+    "[class*='st-key-voir_'] button{background:#0e1117!important;border:1px solid #94a3b880;color:#94a3b8!important;border-radius:12px;font-weight:600}"
+    "[class*='st-key-voir_'] button:hover{border-color:#94a3b8}"
+    "[class*='st-key-voir_'] button p{color:inherit}"
     "[class*='st-key-b_']:has(button:disabled){opacity:.6}"
     "[data-testid='stMetric']{padding:.35rem .8rem}"
     "[data-testid='stMetricValue']{font-size:1.4rem}"
@@ -788,7 +791,9 @@ def render_plan(plans: list[str]) -> None:
                 st.checkbox("garder", key=k)
             with m, st.container(key=f"mir_{i}"):
                 st.checkbox("miroir", key=km)
-            if st.button("▶ voir", key=f"v:{pk}:{i}"):
+            with st.container(key=f"voir_{i}"):
+                clicked = st.button("▶ voir", key=f"v:{pk}:{i}")
+            if clicked:
                 st.session_state["pv"] = i
                 show_clip()
 
