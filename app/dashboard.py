@@ -511,24 +511,27 @@ def _show_thumb(th: "Path | None") -> None:
         st.image(str(th))
 
 
-def _export_video(plan: Plan, look: Look) -> None:
+QUALITY = {"Qualité : Normal": 20, "Qualité : Haute": 16}  # CRF x264 ; plus bas = meilleur et plus gros
+
+
+def _export_video(plan: Plan, look: Look, crf: int = 20) -> None:
     with st.spinner("Rendu de la vidéo en cours (plusieurs minutes possibles)…"):
         try:
-            mp4, _ = export_plan(plan, ROOT, ROOT / "output", look=look)
+            mp4, _ = export_plan(plan, ROOT, ROOT / "output", crf=crf, look=look)
         except ERRORS as e:
             st.error(str(e))
             return
     st.success(f"Vidéo prête : output/{mp4.name}")
 
 
-def _export_clips(plan: Plan, look: Look) -> None:
+def _export_clips(plan: Plan, look: Look, crf: int = 20) -> None:
     bar = st.progress(0.0, text="Rendu des clips…")
 
     def tick(k: int, n: int) -> None:
         bar.progress(k / n, text=f"Clip {k}/{n}")
 
     try:
-        files = export_clips(plan, ROOT, ROOT / "output", on_progress=tick, look=look)
+        files = export_clips(plan, ROOT, ROOT / "output", crf=crf, on_progress=tick, look=look)
     except ERRORS as e:
         bar.empty()
         st.error(str(e))
@@ -686,7 +689,7 @@ def main() -> None:
     plans = list_plans(PLANS)
     fresh = [q for q in st.session_state.get("last_cut", []) if q in plans]
     plans = fresh + [q for q in plans if q not in fresh]
-    t_scan, t_cmp, t_plan, t_clean = st.tabs(["① Découper", "② Composer", "③ Montage", "④ Nettoyage"])
+    t_scan, t_cmp, t_plan, t_clean = st.tabs(["① Découper", "② Composer", "③ Montage", "④ Nettoyage"], key="tabs_main", on_change="rerun")
     with t_scan:
         render_scan()
     with t_cmp:
@@ -776,7 +779,10 @@ def render_plan(plans: list[str]) -> None:
         look = Look(**kw)
     with st.container(border=True):
         st.markdown("**Actions**")
-        st.caption(_sound_recap(kw))
+        q1, q2 = st.columns([4, 1], vertical_alignment="center")
+        q1.caption(_sound_recap(kw))
+        crf = QUALITY[q2.selectbox("Qualité", list(QUALITY), key="exp_quality", label_visibility="collapsed",
+                                   help="Normal = CRF 20 (comme avant). Haute = CRF 16 : fichier plus gros, même vitesse.")]
         a1, a2, a3, a4 = st.columns(4)
         a1.button("Appliquer la sélection", key="b_apply", on_click=on_select,
                   type="primary" if dirty else "secondary")
@@ -789,9 +795,9 @@ def render_plan(plans: list[str]) -> None:
         if approved and not dirty and not none:
             st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
     if go_video:
-        _export_video(plan, look)
+        _export_video(plan, look, crf)
     if go_clips:
-        _export_clips(plan, look)
+        _export_clips(plan, look, crf)
     with st.spinner("Vignettes…"):
         thumbs = make_thumbnails(plan, ROOT)
     if len(thumbs) != len(plan.scenes):
