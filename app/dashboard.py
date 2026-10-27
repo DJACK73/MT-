@@ -565,22 +565,25 @@ def render_frame() -> tuple[dict, bool]:
                    key="look_fit", horizontal=True)
     full, none = fit.startswith("Plein"), fit.startswith("Aucun")
     kw: dict = {"fit": "none" if none else "fill" if full else "bars"}
-    if not full and not none:
-        bg = st.radio("Fond des bandes", ["Flou", "Noir"], key="look_bg", horizontal=True)
-        kw["background"] = "black" if bg == "Noir" else "blur"
-    if full:
-        kw["anchor"] = st.slider("Position du recadrage", 0, 100, 50, key="look_pos",
-                                 help="0 = bord gauche, 100 = bord droit. Valable pour toutes les scènes.") / 100
     if none:
         st.caption("Source telle quelle : ni recadrage, ni fond, ni redimensionnement. Assemblé : une seule source.")
-    else:
+        return kw, none
+    ca, cb = st.columns(2)
+    with ca:
+        if full:
+            kw["anchor"] = st.slider("Position du recadrage", 0, 100, 50, key="look_pos",
+                                     help="0 = bord gauche, 100 = bord droit. Valable pour toutes les scènes.") / 100
+        else:
+            bg = st.radio("Fond des bandes", ["Flou", "Noir"], key="look_bg", horizontal=True)
+            kw["background"] = "black" if bg == "Noir" else "blur"
+    with cb:
         fmt = st.radio("Format", FORMATS, key="look_ratio", horizontal=True)
         if fmt != FORMATS[0]:
             kw["ratio"] = fmt
-        z = st.slider("Zoom", 100, 200, 100, step=5, key="look_zoom", format="%d %%",
-                      help="Zoom fixe, centré, sur toute la vidéo. 100 % = aucun.")
-        if z != 100:
-            kw["zoom"] = z / 100
+    z = st.slider("Zoom", 100, 200, 100, step=5, key="look_zoom", format="%d %%",
+                  help="Zoom fixe, centré. Appliqué aux scènes cochées « zoom ». 100 % = aucun.")
+    if z != 100:
+        kw["zoom"] = z / 100
     return kw, none
 
 
@@ -741,17 +744,16 @@ def render_plan(plans: list[str]) -> None:
         t2.button("Tout décocher", key="b_cb_none", on_click=on_all, args=(False,))
         t3.button("Inverser", key="b_cb_inv", on_click=on_invert)
         t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
-        m1, m2, _, m4 = st.columns([1, 1, 1, 3], vertical_alignment="center")
+        nz = sum(1 for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"zoom:{pk}:{i}"))
+        m1, m2, z1, z2, c5 = st.columns([1, 1, 1, 1, 2], vertical_alignment="center")
         m1.button("Miroir : toutes", key="b_mir_all", on_click=on_mir_all, args=(True,))
         m2.button("Miroir : aucune", key="b_mir_none", on_click=on_mir_all, args=(False,))
-        m4.caption(f"Miroir : {nm}/{len(flags)} · case « miroir » sur chaque vignette (inversée ici et dans « ▶ voir », "
-                   "appliqué à l'export). Non conservé au rechargement. Inverse aussi les textes de la source.")
-        nz = sum(1 for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"zoom:{pk}:{i}"))
-        z1, z2, _, z4 = st.columns([1, 1, 1, 3], vertical_alignment="center")
         z1.button("Zoom : toutes", key="b_zm_all", on_click=on_zoom_all, args=(True,))
         z2.button("Zoom : aucune", key="b_zm_none", on_click=on_zoom_all, args=(False,))
-        z4.caption(f"Zoom : {nz}/{len(flags)} · case « zoom » sur chaque vignette ; niveau = curseur « Zoom » de « Cadrage et format ». "
-                   "Appliqué à l'export. Aperçu des vignettes approximatif.")
+        c5.caption(f"Miroir : {nm}/{len(flags)} · Zoom : {nz}/{len(flags)}",
+                   help="Case « miroir » et case « zoom » sur chaque vignette, appliquées à l'export (et dans « ▶ voir »). "
+                        "Niveau du zoom = curseur « Zoom » de « Cadrage et format ». Miroir non conservé au rechargement ; "
+                        "il inverse aussi les textes de la source. Aperçu des vignettes approximatif.")
         with st.expander("Sélection par numéros (avancé)"):
             st.text_input("Sélection (ex. 1-5,8)", key="spec")
             st.caption("Si ce champ est rempli, il remplace les cases cochées.")
