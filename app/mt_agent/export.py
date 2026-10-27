@@ -37,6 +37,7 @@ class Look:
     snap_beats: bool = False  # fin de chaque scène calée sur un battement (ne raccourcit que) ; exige musique ou mix
     snap_lo: float = 3.0  # durée minimale d'une scène calée (s)
     snap_clips: bool = False  # chaque clip séparé finit sur un battement (ne raccourcit que) ; exige musique ou mix
+    zoom: float = 1.0  # zoom fixe centré sur toute la vidéo, 1..2 ; 1 = aucun ; refusé avec fit="none"
 
 
 def _size(plan: Plan, look: Look | None) -> tuple[int, int]:
@@ -56,6 +57,10 @@ def _look(plan: Plan, look: Look | None) -> tuple[str, str, float]:
     fit = look.fit or ("fill" if plan.options.framing == "crop_center" else "bars")
     if fit == "none" and look.ratio is not None:
         raise PlanError("cadrage « Aucun » : source telle quelle, aucun format à appliquer")
+    if not 1.0 <= look.zoom <= 2.0:
+        raise PlanError(f"zoom hors de 1..2: {look.zoom}")
+    if fit == "none" and look.zoom != 1.0:
+        raise PlanError("cadrage « Aucun » : source telle quelle, aucun zoom à appliquer")
     if fit == "none":  # source telle quelle
         return "none", look.background, look.anchor
     return ("crop_center" if fit == "fill" else "blur_pad"), look.background, look.anchor
@@ -178,6 +183,10 @@ def _flip(look: Look | None, n: int) -> bool:
     return bool(look and (look.mirror or n in look.mirror_only))
 
 
+def _zoom(look: Look | None) -> float:
+    return look.zoom if look else 1.0
+
+
 def _check_mirror(plan: Plan, look: Look | None) -> None:
     bad = sorted(n for n in (look.mirror_only if look else ()) if not 1 <= n <= len(plan.scenes))
     if bad:
@@ -196,11 +205,13 @@ def _anode(i: int, j: int, s: float, e: float) -> str:
 
 
 def _node(i: int, j: int, s: float, e: float, framing: str, w: int, h: int,
-          bg: str = "blur", cx: float = 0.5, mirror: bool = False) -> str:
+          bg: str = "blur", cx: float = 0.5, mirror: bool = False, zoom: float = 1.0) -> str:
     flip = ",hflip" if mirror else ""
     head = f"[{j}:v]trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS{flip}"
     if framing == "none":  # trim seul : ni scale, ni pad, ni flou, ni fps
         return f"{head},format=yuv420p[v{i}]"
+    if zoom != 1.0:  # zoom fixe centré, avant tout scale (fond flou et premier plan le reçoivent)
+        head += f",crop=trunc(iw/{zoom:g}/2)*2:trunc(ih/{zoom:g}/2)*2"
     pos = "" if cx == 0.5 else f":(iw-ow)*{cx:.3f}:(ih-oh)/2"
     fill = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}{pos}"
     if framing == "crop_center":
@@ -235,7 +246,7 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
     _check_mirror(plan, look)
     nums = [n for n, s in enumerate(plan.scenes, 1) if s.selected]
     nodes = [_node(i, order.index(sc.source_id), sc.start, sc.end, fr, w, h, bg, cx,
-                   _flip(look, nums[i]))
+                   _flip(look, nums[i]), _zoom(look))
              for i, sc in enumerate(chosen)]
     with_a, db = _audio(look)
     use_m, mpath, mstart, mdb, mfade = _music(look)
@@ -360,7 +371,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     done: list[Path] = []
     for k, (n, sc) in enumerate(chosen, 1):
         d = ends[k - 1]
-        node = _node(0, 0, 0.0, d, fr, w, h, bg, cx, _flip(look, n))
+        node = _node(0, 0, 0.0, d, fr, w, h, bg, cx, _flip(look, n), _zoom(look))
         args = ["-ss", f"{sc.start:.3f}", "-t", f"{d:.3f}", "-i", str(srcs[sc.source_id]),
                 "-filter_complex", node, "-map", "[v0]"]
         if use_m:  # musique : 2e entrée bouclée, coupée net à la durée du clip

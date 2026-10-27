@@ -561,6 +561,10 @@ def render_frame() -> tuple[dict, bool]:
         fmt = st.radio("Format", FORMATS, key="look_ratio", horizontal=True)
         if fmt != FORMATS[0]:
             kw["ratio"] = fmt
+        z = st.slider("Zoom", 100, 200, 100, step=5, key="look_zoom", format="%d %%",
+                      help="Zoom fixe, centré, sur toute la vidéo. 100 % = aucun.")
+        if z != 100:
+            kw["zoom"] = z / 100
     return kw, none
 
 
