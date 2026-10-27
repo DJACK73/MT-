@@ -38,6 +38,7 @@ class Look:
     snap_lo: float = 3.0  # durée minimale d'une scène calée (s)
     snap_clips: bool = False  # chaque clip séparé finit sur un battement (ne raccourcit que) ; exige musique ou mix
     zoom: float = 1.0  # zoom fixe centré sur toute la vidéo, 1..2 ; 1 = aucun ; refusé avec fit="none"
+    zoom_only: frozenset[int] | None = None  # None = toutes les scènes ; sinon seulement ces scènes (n° du plan, base 1)
 
 
 def _size(plan: Plan, look: Look | None) -> tuple[int, int]:
@@ -183,8 +184,17 @@ def _flip(look: Look | None, n: int) -> bool:
     return bool(look and (look.mirror or n in look.mirror_only))
 
 
-def _zoom(look: Look | None) -> float:
-    return look.zoom if look else 1.0
+def _zoom(look: Look | None, n: int) -> float:
+    """Zoom de la scène n° n (base 1) : look.zoom si la scène est visée, sinon 1."""
+    if not look or (look.zoom_only is not None and n not in look.zoom_only):
+        return 1.0
+    return look.zoom
+
+
+def _check_zoom(plan: Plan, look: Look | None) -> None:
+    bad = sorted(n for n in ((look.zoom_only or ()) if look else ()) if not 1 <= n <= len(plan.scenes))
+    if bad:
+        raise PlanError(f"zoom : scènes hors de 1..{len(plan.scenes)}: {bad}")
 
 
 def _check_mirror(plan: Plan, look: Look | None) -> None:
@@ -244,9 +254,10 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
         raise PlanError("cadrage « Aucun » : export assemblé limité à une seule source "
                         "(tailles possiblement différentes) ; utiliser les clips séparés")
     _check_mirror(plan, look)
+    _check_zoom(plan, look)
     nums = [n for n, s in enumerate(plan.scenes, 1) if s.selected]
     nodes = [_node(i, order.index(sc.source_id), sc.start, sc.end, fr, w, h, bg, cx,
-                   _flip(look, nums[i]), _zoom(look))
+                   _flip(look, nums[i]), _zoom(look, nums[i]))
              for i, sc in enumerate(chosen)]
     with_a, db = _audio(look)
     use_m, mpath, mstart, mdb, mfade = _music(look)
@@ -353,6 +364,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     if use_m:
         _check_music(mfile, mstart)
     _check_mirror(plan, look)
+    _check_zoom(plan, look)
     ends = _clip_snap(look, root, [sc.end - sc.start for _, sc in chosen])
     multi = len(plan.sources) > 1  # montage multi-vidéos : NNN-<lettre de la vidéo>.mp4
     lets = {s.id: letter(i) for i, s in enumerate(plan.sources)}
@@ -371,7 +383,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     done: list[Path] = []
     for k, (n, sc) in enumerate(chosen, 1):
         d = ends[k - 1]
-        node = _node(0, 0, 0.0, d, fr, w, h, bg, cx, _flip(look, n), _zoom(look))
+        node = _node(0, 0, 0.0, d, fr, w, h, bg, cx, _flip(look, n), _zoom(look, n))
         args = ["-ss", f"{sc.start:.3f}", "-t", f"{d:.3f}", "-i", str(srcs[sc.source_id]),
                 "-filter_complex", node, "-map", "[v0]"]
         if use_m:  # musique : 2e entrée bouclée, coupée net à la durée du clip

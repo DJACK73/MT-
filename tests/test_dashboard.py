@@ -263,6 +263,23 @@ class Dashboard(unittest.TestCase):
             fit="bars", background="blur", anchor=0.5, mirror_only=frozenset({2})))
         self.assertEqual(len(list(self.out.glob("clips/*/*.mp4"))), 2)
 
+    def _zms(self, at) -> list:
+        return [c for c in at.checkbox if str(c.key).startswith("zoom:")]
+
+    def test_zoom_par_scenes(self) -> None:
+        from mt_agent.export import Look, export_clips
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        self._ready(at)
+        self.assertEqual([c.value for c in self._zms(at)], [False, False, False])
+        self._zms(at)[1].check().run()
+        at.slider(key="look_zoom").set_value(150).run()
+        with patch("mt_agent.export.export_clips", wraps=export_clips) as m:
+            _btn(at, "Exporter en clips séparés").click().run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.error), 0)
+        self.assertEqual(m.call_args.kwargs["look"], Look(
+            fit="bars", background="blur", anchor=0.5, zoom=1.5, zoom_only=frozenset({2})))
+
     def test_miroir_toutes_aucune(self) -> None:
         from mt_agent.export import Look, export_clips
         at = AppTest.from_file(str(APP), default_timeout=120).run()
