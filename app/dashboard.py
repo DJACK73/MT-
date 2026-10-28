@@ -203,12 +203,14 @@ def show_clip() -> None:
     mir = bool(st.session_state.get(f"mir:{path.name}:{i}", False))
     zoom = 1.0 if not st.session_state.get(f"zoom:{path.name}:{i}") or str(st.session_state.get("look_fit", "")).startswith("Aucun") \
         else min(max(int(st.session_state.get("look_zoom", 100)), 100), 200) / 100
+    spd = SPEED.get(str(st.session_state.get("exp_speed", "")), 1.0)
     st.markdown(f"**Scène {i}/{n}** · {sc.end - sc.start:.2f} s · " + (":green[✓ gardée]" if kept else ":red[✗ non gardée]")
-                + (" · :blue[**⇋ miroir**]" if mir else "") + (f" · :orange[**🔍 zoom {zoom * 100:.0f} %**]" if zoom != 1.0 else ""))
+                + (" · :blue[**⇋ miroir**]" if mir else "") + (f" · :orange[**🔍 zoom {zoom * 100:.0f} %**]" if zoom != 1.0 else "")
+                + (f" · :violet[**⏩ {spd:g}×**]" if spd != 1.0 else ""))
     st.caption(f"{sc.start:.2f} → {sc.end:.2f} s dans la source")
     try:
         with st.spinner("Préparation de l'aperçu…"):
-            clip = preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT, mirror=mir, zoom=zoom)
+            clip = preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT, mirror=mir, zoom=zoom, speed=spd)
         st.video(str(clip))
     except Exception as e:  # bord UI : afficher l'erreur sans planter la page
         st.error(f"Aperçu impossible : {e}")
@@ -783,7 +785,7 @@ def render_plan(plans: list[str]) -> None:
         st.markdown("**Actions**")
         q1, q3, q2 = st.columns([3, 1, 1], vertical_alignment="center")
         q1.caption(_sound_recap(kw))
-        sp = SPEED[q3.selectbox("Vitesse", list(SPEED), index=2, key="exp_speed", label_visibility="collapsed", help="Toute la vidéo, à l'export seulement (ni vignettes ni « ▶ voir »). Ralenti = images répétées, sans interpolation.")]
+        sp = SPEED[q3.selectbox("Vitesse", list(SPEED), index=2, key="exp_speed", label_visibility="collapsed", help="Toute la vidéo, à l'export et dans « ▶ voir » (pas les vignettes). Ralenti = images répétées, sans interpolation.")]
         crf = QUALITY[q2.selectbox("Qualité", list(QUALITY), key="exp_quality", label_visibility="collapsed",
                                    help="Normal = CRF 20 (comme avant). Haute = CRF 16 : fichier plus gros, même vitesse.")]
         if sp != 1.0:
