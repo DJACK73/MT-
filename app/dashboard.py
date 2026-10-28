@@ -512,6 +512,8 @@ def _show_thumb(th: "Path | None") -> None:
 
 
 QUALITY = {"Qualité : Normal": 20, "Qualité : Haute": 16}  # CRF x264 ; plus bas = meilleur et plus gros
+SPEED = {"Vitesse : 0,5×": 0.5, "Vitesse : 0,75×": 0.75, "Vitesse : 1×": 1.0,
+         "Vitesse : 1,25×": 1.25, "Vitesse : 1,5×": 1.5, "Vitesse : 2×": 2.0}
 
 
 def _export_video(plan: Plan, look: Look, crf: int = 20) -> None:
@@ -779,10 +781,14 @@ def render_plan(plans: list[str]) -> None:
         look = Look(**kw)
     with st.container(border=True):
         st.markdown("**Actions**")
-        q1, q2 = st.columns([4, 1], vertical_alignment="center")
+        q1, q3, q2 = st.columns([3, 1, 1], vertical_alignment="center")
         q1.caption(_sound_recap(kw))
+        sp = SPEED[q3.selectbox("Vitesse", list(SPEED), index=2, key="exp_speed", label_visibility="collapsed", help="Toute la vidéo, à l'export seulement (ni vignettes ni « ▶ voir »). Ralenti = images répétées, sans interpolation.")]
         crf = QUALITY[q2.selectbox("Qualité", list(QUALITY), key="exp_quality", label_visibility="collapsed",
                                    help="Normal = CRF 20 (comme avant). Haute = CRF 16 : fichier plus gros, même vitesse.")]
+        if sp != 1.0:
+            import dataclasses
+            look = dataclasses.replace(look, speed=sp)
         a1, a2, a3, a4 = st.columns(4)
         a1.button("Appliquer la sélection", key="b_apply", on_click=on_select,
                   type="primary" if dirty else "secondary")

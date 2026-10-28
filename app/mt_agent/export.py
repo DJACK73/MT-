@@ -39,6 +39,7 @@ class Look:
     snap_clips: bool = False  # chaque clip séparé finit sur un battement (ne raccourcit que) ; exige musique ou mix
     zoom: float = 1.0  # zoom fixe centré sur toute la vidéo, 1..2 ; 1 = aucun ; refusé avec fit="none"
     zoom_only: frozenset[int] | None = None  # None = toutes les scènes ; sinon seulement ces scènes (n° du plan, base 1)
+    speed: float = 1.0  # vitesse de lecture de toute la vidéo, 0.5..2 ; 1 = normale (setpts + atempo)
 
 
 def _size(plan: Plan, look: Look | None) -> tuple[int, int]:
@@ -149,15 +150,16 @@ def _snap(plan: Plan, look: Look | None, root: Path) -> Plan:
     r = analyse(mfile, root / "workspace" / "rhythm")
     if not r["beats"]:
         raise PlanError("calage : rythme non fiable pour ce morceau")
-    durs = [s.end - s.start for s in plan.scenes if s.selected]
+    sp = _speed(look)
+    durs = [(s.end - s.start) / sp for s in plan.scenes if s.selected]  # durées de sortie
     beats = loop_beats(r["beats"], r["length"], mstart, sum(durs))
     it = iter(snap_durations(durs, beats, look.snap_lo))
     out = []
     for s in plan.scenes:
         if s.selected:
             e = next(it)
-            if e < s.end - s.start - 1e-9:
-                s = s.model_copy(update={"end": min(s.end, round(s.start + e, 3))})
+            if e < (s.end - s.start) / sp - 1e-9:
+                s = s.model_copy(update={"end": min(s.end, round(s.start + e * sp, 3))})
         out.append(s)
     return plan.model_copy(update={"scenes": out})
 
@@ -203,21 +205,30 @@ def _check_mirror(plan: Plan, look: Look | None) -> None:
         raise PlanError(f"miroir : scènes hors de 1..{len(plan.scenes)}: {bad}")
 
 
+def _speed(look: Look | None) -> float:
+    sp = look.speed if look else 1.0
+    if not 0.5 <= sp <= 2.0:
+        raise PlanError(f"vitesse hors de 0.5..2: {sp}")
+    return sp
+
+
 def _afilter(d: float, db: float = 0.0) -> str:
     f = min(_FADE, d / 2)
     vol = f"volume={db:g}dB," if db else ""
     return f"{vol}afade=t=in:d={f:g},afade=t=out:st={d - f:.3f}:d={f:g}"
 
 
-def _anode(i: int, j: int, s: float, e: float) -> str:
-    return (f"[{j}:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS,"
-            f"aformat=sample_rates=48000:channel_layouts=stereo,{_afilter(e - s)}[a{i}]")
+def _anode(i: int, j: int, s: float, e: float, speed: float = 1.0) -> str:
+    tempo = f"atempo={speed:g}," if speed != 1.0 else ""
+    return (f"[{j}:a]atrim=start={s:.3f}:end={e:.3f},asetpts=PTS-STARTPTS,{tempo}"
+            f"aformat=sample_rates=48000:channel_layouts=stereo,{_afilter((e - s) / speed)}[a{i}]")
 
 
 def _node(i: int, j: int, s: float, e: float, framing: str, w: int, h: int,
-          bg: str = "blur", cx: float = 0.5, mirror: bool = False, zoom: float = 1.0) -> str:
+          bg: str = "blur", cx: float = 0.5, mirror: bool = False, zoom: float = 1.0, speed: float = 1.0) -> str:
     flip = ",hflip" if mirror else ""
-    head = f"[{j}:v]trim=start={s:.3f}:end={e:.3f},setpts=PTS-STARTPTS{flip}"
+    pts = "PTS-STARTPTS" if speed == 1.0 else f"(PTS-STARTPTS)/{speed:g}"
+    head = f"[{j}:v]trim=start={s:.3f}:end={e:.3f},setpts={pts}{flip}"
     if framing == "none":  # trim seul : ni scale, ni pad, ni flou, ni fps
         return f"{head},format=yuv420p[v{i}]"
     if zoom != 1.0:  # zoom fixe centré, avant tout scale (fond flou et premier plan le reçoivent)
@@ -255,15 +266,16 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
                         "(tailles possiblement différentes) ; utiliser les clips séparés")
     _check_mirror(plan, look)
     _check_zoom(plan, look)
+    sp = _speed(look)
     nums = [n for n, s in enumerate(plan.scenes, 1) if s.selected]
     nodes = [_node(i, order.index(sc.source_id), sc.start, sc.end, fr, w, h, bg, cx,
-                   _flip(look, nums[i]), _zoom(look, nums[i]))
+                   _flip(look, nums[i]), _zoom(look, nums[i]), sp)
              for i, sc in enumerate(chosen)]
     with_a, db = _audio(look)
     use_m, mpath, mstart, mdb, mfade = _music(look)
     n = len(chosen)
     srcs = [paths[k] for k in order]
-    total = sum(sc.end - sc.start for sc in chosen)
+    total = sum(sc.end - sc.start for sc in chosen) / sp
     mix = with_a and use_m
     ech = _echo(look)
     fin = "aud0" if ech else "aud"
@@ -271,7 +283,7 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
         labels = "".join(f"[v{i}]" for i in range(n))
         parts = [*nodes, f"{labels}concat=n={n}:v=1:a=0[out]"]
     else:
-        anodes = [_anode(i, order.index(sc.source_id), sc.start, sc.end) for i, sc in enumerate(chosen)]
+        anodes = [_anode(i, order.index(sc.source_id), sc.start, sc.end, sp) for i, sc in enumerate(chosen)]
         labels = "".join(f"[v{i}][a{i}]" for i in range(n))
         gain = f"volume={db:g}dB" if db else "anull"
         parts = [*nodes, *anodes, f"{labels}concat=n={n}:v=1:a=1[out][ac]",
@@ -298,7 +310,7 @@ def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         raise PlanError(f"sources absentes: {missing}")
     with_a, _ = _audio(look)
     use_m, _, mstart, _, _ = _music(look)
-    total = sum(sc.end - sc.start for sc in eff.scenes if sc.selected)
+    total = sum(sc.end - sc.start for sc in eff.scenes if sc.selected) / _speed(look)
     vsrcs = srcs[:-1] if use_m else srcs
     if use_m:
         _check_music(srcs[-1], mstart)
@@ -365,7 +377,9 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         _check_music(mfile, mstart)
     _check_mirror(plan, look)
     _check_zoom(plan, look)
-    ends = _clip_snap(look, root, [sc.end - sc.start for _, sc in chosen])
+    sp = _speed(look)
+    tempo = f"atempo={sp:g}," if sp != 1.0 else ""
+    ends = _clip_snap(look, root, [(sc.end - sc.start) / sp for _, sc in chosen])
     multi = len(plan.sources) > 1  # montage multi-vidéos : NNN-<lettre de la vidéo>.mp4
     lets = {s.id: letter(i) for i, s in enumerate(plan.sources)}
     stem = "montage" if multi else Path(paths[chosen[0][1].source_id]).stem
@@ -382,9 +396,10 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         raise PlanError(f"trop de dossiers existants: {out_dir / 'clips' / base}")
     done: list[Path] = []
     for k, (n, sc) in enumerate(chosen, 1):
-        d = ends[k - 1]
-        node = _node(0, 0, 0.0, d, fr, w, h, bg, cx, _flip(look, n), _zoom(look, n))
-        args = ["-ss", f"{sc.start:.3f}", "-t", f"{d:.3f}", "-i", str(srcs[sc.source_id]),
+        d = ends[k - 1]  # durée de sortie
+        dsrc = d * sp  # durée lue dans la source
+        node = _node(0, 0, 0.0, dsrc, fr, w, h, bg, cx, _flip(look, n), _zoom(look, n), sp)
+        args = ["-ss", f"{sc.start:.3f}", "-t", f"{dsrc:.3f}", "-i", str(srcs[sc.source_id]),
                 "-filter_complex", node, "-map", "[v0]"]
         if use_m:  # musique : 2e entrée bouclée, coupée net à la durée du clip
             if sc.source_id not in sound:
@@ -392,7 +407,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
             mix = with_a and sound[sc.source_id]  # source sans piste => musique seule
             fcx = node + ";" + _mchain(1, d, mstart, mdb, mfade, "mus" if mix else fin)
             if mix:
-                fcx += (";[0:a]aformat=sample_rates=48000:channel_layouts=stereo,"
+                fcx += (f";[0:a]{tempo}aformat=sample_rates=48000:channel_layouts=stereo,"
                         f"{_afilter(d, db)}[src];" + _duck("src", "mus", fin))
             if ech:
                 fcx += f";[aud0]{ech}[aud]"
@@ -400,7 +415,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
             args[i:i + 2] = ["-stream_loop", "-1", "-i", str(mfile), "-filter_complex", fcx]
             args += ["-map", "[aud]", "-c:a", "aac", "-b:a", "192k", "-t", f"{d:.3f}"]
         elif with_a:  # "?" : source sans piste audio => clip muet, pas d'erreur
-            args += ["-map", "0:a:0?", "-af", _afilter(d, db) + (f",{ech}" if ech else ""), "-c:a", "aac", "-b:a", "192k"]
+            args += ["-map", "0:a:0?", "-af", tempo + _afilter(d, db) + (f",{ech}" if ech else ""), "-c:a", "aac", "-b:a", "192k"]
         args += ["-c:v", "libx264", "-crf", str(crf), "-preset", "veryfast", "-movflags", "+faststart"]
         dest = folder / (f"{n:03d}-{lets[sc.source_id]}.mp4" if multi else f"{n:03d}.mp4")
         run_ffmpeg(args, dest)
