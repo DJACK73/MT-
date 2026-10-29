@@ -40,6 +40,8 @@ class Look:
     zoom: float = 1.0  # zoom fixe centré sur toute la vidéo, 1..2 ; 1 = aucun ; refusé avec fit="none"
     zoom_only: frozenset[int] | None = None  # None = toutes les scènes ; sinon seulement ces scènes (n° du plan, base 1)
     speed: float = 1.0  # vitesse de lecture de toute la vidéo, 0.5..2 ; 1 = normale (setpts + atempo)
+    trans: Literal["none", "fade", "fadeblack", "slide"] = "none"  # transition entre scènes (export assemblé seulement)
+    trans_d: float = 0.5  # durée de la transition (s), 0.2..2, et <= moitié de la scène la plus courte
 
 
 def _size(plan: Plan, look: Look | None) -> tuple[int, int]:
@@ -212,6 +214,51 @@ def _speed(look: Look | None) -> float:
     return sp
 
 
+TRANS = {"none": None, "fade": "fade", "fadeblack": "fadeblack", "slide": "slideleft"}
+
+
+def _trans(look: Look | None, durs: list[float]) -> tuple[str | None, float]:
+    """(nom xfade, durée) ; (None, 0.0) = coupe franche. durs = durées de sortie des scènes."""
+    name = look.trans if look else "none"
+    if name not in TRANS:
+        raise PlanError(f"transition inconnue: {name}")
+    if name == "none" or len(durs) < 2:
+        return None, 0.0
+    td = look.trans_d
+    if not 0.2 <= td <= 2.0:
+        raise PlanError(f"durée de transition hors de 0.2..2 s: {td}")
+    if look.snap_beats:
+        raise PlanError("transition : incompatible avec le calage sur les battements (non validé)")
+    if td > min(durs) / 2:
+        raise PlanError(f"transition ({td:g} s) > moitié de la scène la plus courte ({min(durs):g} s)")
+    return TRANS[name], td
+
+
+def _join(durs: list[float], tr: str | None, td: float, with_a: bool) -> list[str]:
+    """Assemble les nœuds v{i}/a{i} : concat (coupe franche) ou chaîne xfade/acrossfade."""
+    n = len(durs)
+    if tr is None:
+        if with_a:
+            lab = "".join(f"[v{i}][a{i}]" for i in range(n))
+            return [f"{lab}concat=n={n}:v=1:a=1[out][ac]"]
+        lab = "".join(f"[v{i}]" for i in range(n))
+        return [f"{lab}concat=n={n}:v=1:a=0[out]"]
+    parts = [f"[v{i}]settb=AVTB[s{i}]" for i in range(n)]
+    prev, acc = "s0", durs[0]
+    for i in range(1, n):
+        lab = "out" if i == n - 1 else f"x{i}"
+        off = acc - td
+        parts.append(f"[{prev}][s{i}]xfade=transition={tr}:duration={td:g}:offset={off:.3f}[{lab}]")
+        prev, acc = lab, off + durs[i]
+    if with_a:
+        prev = "a0"
+        for i in range(1, n):
+            lab = "ac" if i == n - 1 else f"ax{i}"
+            parts.append(f"[{prev}][a{i}]acrossfade=d={td:g}[{lab}]")
+            prev = lab
+    return parts
+
+
 def _afilter(d: float, db: float = 0.0) -> str:
     f = min(_FADE, d / 2)
     vol = f"volume={db:g}dB," if db else ""
@@ -275,18 +322,18 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
     use_m, mpath, mstart, mdb, mfade = _music(look)
     n = len(chosen)
     srcs = [paths[k] for k in order]
-    total = sum(sc.end - sc.start for sc in chosen) / sp
+    durs = [(sc.end - sc.start) / sp for sc in chosen]
+    tr, td = _trans(look, durs)
+    total = sum(durs) - (len(durs) - 1) * td
     mix = with_a and use_m
     ech = _echo(look)
     fin = "aud0" if ech else "aud"
     if not with_a:
-        labels = "".join(f"[v{i}]" for i in range(n))
-        parts = [*nodes, f"{labels}concat=n={n}:v=1:a=0[out]"]
+        parts = [*nodes, *_join(durs, tr, td, False)]
     else:
         anodes = [_anode(i, order.index(sc.source_id), sc.start, sc.end, sp) for i, sc in enumerate(chosen)]
-        labels = "".join(f"[v{i}][a{i}]" for i in range(n))
         gain = f"volume={db:g}dB" if db else "anull"
-        parts = [*nodes, *anodes, f"{labels}concat=n={n}:v=1:a=1[out][ac]",
+        parts = [*nodes, *anodes, *_join(durs, tr, td, True),
                  f"[ac]{gain}[{'src' if mix else fin}]"]
     if use_m:
         parts.append(_mchain(len(srcs), total, mstart, mdb, mfade, "mus" if mix else fin))
@@ -310,7 +357,8 @@ def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         raise PlanError(f"sources absentes: {missing}")
     with_a, _ = _audio(look)
     use_m, _, mstart, _, _ = _music(look)
-    total = sum(sc.end - sc.start for sc in eff.scenes if sc.selected) / _speed(look)
+    durs = [(sc.end - sc.start) / _speed(look) for sc in eff.scenes if sc.selected]
+    total = sum(durs) - (len(durs) - 1) * _trans(look, durs)[1]
     vsrcs = srcs[:-1] if use_m else srcs
     if use_m:
         _check_music(srcs[-1], mstart)
