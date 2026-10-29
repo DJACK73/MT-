@@ -18,6 +18,7 @@ from mt_agent.selection import spec_from_flags
 from mt_agent.preview import preview_clip
 from mt_agent.fit import window_flag
 from mt_agent.clean import plan_clean, run_clean, size_of
+from mt_agent.timeline import FRISE_CSS, frise_html
 
 PLANS = ROOT / "workspace" / "plans"
 ERRORS = (PlanError, ValidationError, ValueError, OSError, RuntimeError, MediaError)
@@ -825,6 +826,13 @@ def render_plan(plans: list[str]) -> None:
                 show_clip()
 
 
+@st.cache_data(show_spinner=False)
+def _thumb_uri(path: str, mtime_ns: int) -> str:
+    import base64
+    mime = "image/png" if path.lower().endswith(".png") else "image/jpeg"
+    return f"data:{mime};base64," + base64.b64encode(Path(path).read_bytes()).decode()
+
+
 def render_timeline(plans: list[str]) -> None:
     cur = st.session_state.get("plan_path")
     path = Path(cur if cur in plans else plans[0])
@@ -840,6 +848,26 @@ def render_timeline(plans: list[str]) -> None:
         st.info("Approuve la sélection dans ③ pour activer les exports.")
     elif dirty:
         st.warning("Sélection modifiée depuis l'approbation : retourne dans ③.")
+    with st.container(border=True):
+        st.markdown("**Frise**")
+        kept_idx = [i for i, sc in enumerate(plan.scenes) if sc.selected]
+        if not kept_idx:
+            st.caption("Aucune scène gardée : coche des scènes dans ③ puis « Appliquer la sélection ».")
+        else:
+            fthumbs = make_thumbnails(plan, ROOT)
+            fids = [x.id for x in plan.sources]
+            items = []
+            for idx in kept_idx:
+                sc = plan.scenes[idx]
+                th = fthumbs[idx] if idx < len(fthumbs) else None
+                ftag = letter(fids.index(sc.source_id)) if len(fids) > 1 and sc.source_id in fids else ""
+                items.append({"uri": _thumb_uri(str(th), th.stat().st_mtime_ns) if th else None,
+                              "dur": sc.end - sc.start,
+                              "label": f"{ftag}{idx + 1} · {sc.end - sc.start:.1f} s"
+                                       + (" ⇋" if st.session_state.get(f"mir:{pk}:{idx + 1}") else "")
+                                       + (" 🔍" if st.session_state.get(f"zoom:{pk}:{idx + 1}") else "")})
+            st.markdown(FRISE_CSS + frise_html(items), unsafe_allow_html=True)
+            st.caption(f"{len(kept_idx)} scènes gardées · largeur = durée. Chaque ▸ est une coupe : les transitions s'y placeront.")
     with st.container(border=True):
         st.markdown("**Réglages**")
         with st.expander("Cadrage et format"):
