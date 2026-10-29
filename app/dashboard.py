@@ -671,9 +671,9 @@ def render_guide(has_plan: bool) -> None:
         if not has_plan:
             st.caption("Dépose une vidéo dans inbox/, puis lance la découpe dans ① Découper.")
         else:
-            st.caption("① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Montage : "
-                       "coche les scènes, « Appliquer la sélection », « Approuver », puis exporte.")
-        st.caption("③ est rangé en trois blocs : **Sélection** (cases, miroir) → **Réglages** (cadrage, son) → **Actions** (récap du son, appliquer, approuver, exporter).")
+            st.caption("① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Timeline : "
+                       "coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), nettoyage (⑤).")
+        st.caption("③ : **Sélection** (cases, miroir, zoom) → **Actions** (appliquer, approuver). ④ : **Réglages** (cadrage, son) → **Export** (vitesse, qualité, exports).")
         st.caption("Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.")
         if mode == "Musique ajoutée":
             st.caption("Calage : la fin d'une scène recule jusqu'à un battement, jamais sous la durée minimale ; "
@@ -693,7 +693,7 @@ def main() -> None:
     plans = list_plans(PLANS)
     fresh = [q for q in st.session_state.get("last_cut", []) if q in plans]
     plans = fresh + [q for q in plans if q not in fresh]
-    t_scan, t_cmp, t_plan, t_clean = st.tabs(["① Découper", "② Composer", "③ Montage", "④ Nettoyage"], key="tabs_main", on_change="rerun")
+    t_scan, t_cmp, t_plan, t_tl, t_clean = st.tabs(["① Découper", "② Composer", "③ Sélection", "④ Timeline", "⑤ Nettoyage"], key="tabs_main", on_change="rerun")
     with t_scan:
         render_scan()
     with t_cmp:
@@ -701,6 +701,11 @@ def main() -> None:
     with t_plan:
         if plans:
             render_plan(plans)
+        else:
+            st.info("Aucun plan pour l'instant : découpe une vidéo dans l'onglet ①.")
+    with t_tl:
+        if plans:
+            render_timeline(plans)
         else:
             st.info("Aucun plan pour l'instant : découpe une vidéo dans l'onglet ①.")
     with t_clean:
@@ -736,7 +741,7 @@ def render_plan(plans: list[str]) -> None:
     elif plan.status == "rendered":
         st.success("Plan déjà rendu.")
     elif approved:
-        st.success("Approuvé : choisis un export ci-dessous.")
+        st.success("Approuvé : réglages et export dans ④ Timeline.")
     elif plan.status == "approved":
         st.warning("Plan modifié depuis l'approbation : approbation invalide.")
     elif not saved_any:
@@ -765,47 +770,13 @@ def render_plan(plans: list[str]) -> None:
             st.text_input("Sélection (ex. 1-5,8)", key="spec")
             st.caption("Si ce champ est rempli, il remplace les cases cochées.")
     with st.container(border=True):
-        st.markdown("**Réglages**")
-        with st.expander("Cadrage et format"):
-            kw, none = render_frame()
-        mir = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
-        if mir:
-            kw["mirror_only"] = mir
-        zms = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"zoom:{pk}:{i}"))
-        if "zoom" in kw:
-            if zms:
-                kw["zoom_only"] = zms
-            else:
-                kw.pop("zoom")
-        if none and len({sc.source_id for sc in plan.scenes if sc.selected}) > 1:
-            st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
-        kw.update(render_sound(plan))
-        look = Look(**kw)
-    with st.container(border=True):
         st.markdown("**Actions**")
-        q1, q3, q2 = st.columns([3, 1, 1], vertical_alignment="center")
-        q1.caption(_sound_recap(kw))
-        sp = SPEED[q3.selectbox("Vitesse", list(SPEED), index=2, key="exp_speed", label_visibility="collapsed", help="Toute la vidéo, à l'export et dans « ▶ voir » (pas les vignettes). Ralenti = images répétées, sans interpolation.")]
-        crf = QUALITY[q2.selectbox("Qualité", list(QUALITY), key="exp_quality", label_visibility="collapsed",
-                                   help="Normal = CRF 20 (comme avant). Haute = CRF 16 : fichier plus gros, même vitesse.")]
-        if sp != 1.0:
-            import dataclasses
-            look = dataclasses.replace(look, speed=sp)
-        a1, a2, a3, a4 = st.columns(4)
+        a1, a2, _ = st.columns([1, 1, 2])
         a1.button("Appliquer la sélection", key="b_apply", on_click=on_select,
                   type="primary" if dirty else "secondary")
         a2.button("Approuver", key="b_ok", on_click=on_approve,
                   type="primary" if pending and not dirty and any(saved) else "secondary",
                   disabled=not pending or dirty or not any(saved))
-        go_video = a3.button("Exporter la vidéo assemblée", key="b_exp_video", type="primary" if approved and not dirty else "secondary",
-                             disabled=not approved or dirty)
-        go_clips = a4.button("Exporter en clips séparés", key="b_exp_clips", disabled=not approved or dirty)
-        if approved and not dirty and not none:
-            st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
-    if go_video:
-        _export_video(plan, look, crf)
-    if go_clips:
-        _export_clips(plan, look, crf)
     with st.spinner("Vignettes…"):
         thumbs = make_thumbnails(plan, ROOT)
     if len(thumbs) != len(plan.scenes):
@@ -852,5 +823,60 @@ def render_plan(plans: list[str]) -> None:
             if clicked:
                 st.session_state["pv"] = i
                 show_clip()
+
+
+def render_timeline(plans: list[str]) -> None:
+    cur = st.session_state.get("plan_path")
+    path = Path(cur if cur in plans else plans[0])
+    plan = load(path)
+    pk = path.name
+    saved = [s.selected for s in plan.scenes]
+    spec = str(st.session_state.get("spec", "")).strip()
+    dirty = bool(spec) or _flags(plan, pk) != saved
+    approved = is_approved(plan)
+    kept = sum(s.end - s.start for s in plan.scenes if s.selected)
+    st.caption(f"Plan : {plan_label(str(path), mark=False)} · {sum(saved)}/{len(saved)} scènes · {kept:.1f} s")
+    if not approved:
+        st.info("Approuve la sélection dans ③ pour activer les exports.")
+    elif dirty:
+        st.warning("Sélection modifiée depuis l'approbation : retourne dans ③.")
+    with st.container(border=True):
+        st.markdown("**Réglages**")
+        with st.expander("Cadrage et format"):
+            kw, none = render_frame()
+        mir = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
+        if mir:
+            kw["mirror_only"] = mir
+        zms = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"zoom:{pk}:{i}"))
+        if "zoom" in kw:
+            if zms:
+                kw["zoom_only"] = zms
+            else:
+                kw.pop("zoom")
+        if none and len({sc.source_id for sc in plan.scenes if sc.selected}) > 1:
+            st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
+        kw.update(render_sound(plan))
+        look = Look(**kw)
+    with st.container(border=True):
+        st.markdown("**Export**")
+        q1, q3, q2 = st.columns([3, 1, 1], vertical_alignment="center")
+        q1.caption(_sound_recap(kw))
+        sp = SPEED[q3.selectbox("Vitesse", list(SPEED), index=2, key="exp_speed", label_visibility="collapsed", help="Toute la vidéo, à l'export et dans « ▶ voir » (pas les vignettes). Ralenti = images répétées, sans interpolation.")]
+        crf = QUALITY[q2.selectbox("Qualité", list(QUALITY), key="exp_quality", label_visibility="collapsed",
+                                   help="Normal = CRF 20 (comme avant). Haute = CRF 16 : fichier plus gros, même vitesse.")]
+        if sp != 1.0:
+            import dataclasses
+            look = dataclasses.replace(look, speed=sp)
+        e1, e2 = st.columns(2)
+        go_video = e1.button("Exporter la vidéo assemblée", key="b_exp_video", type="primary" if approved and not dirty else "secondary",
+                             disabled=not approved or dirty)
+        go_clips = e2.button("Exporter en clips séparés", key="b_exp_clips", disabled=not approved or dirty)
+        if approved and not dirty and not none:
+            st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
+    if go_video:
+        _export_video(plan, look, crf)
+    if go_clips:
+        _export_clips(plan, look, crf)
+
 
 main()
