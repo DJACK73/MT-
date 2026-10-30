@@ -13,6 +13,13 @@ class TransitionTest(unittest.TestCase):
         self.assertEqual(_trans(Look(trans="fade", trans_d=0.5), [4.0, 3.0]), ("fade", 0.5))
         self.assertEqual(_trans(Look(trans="slide"), [4.0, 3.0])[0], "slideleft")
 
+    def test_bounds(self):
+        self.assertEqual(_trans(Look(trans="fade", trans_d=0.1), [4.0, 4.0]), ("fade", 0.1))
+        self.assertEqual(_trans(Look(trans="fade", trans_d=1.0), [4.0, 4.0]), ("fade", 1.0))
+        for bad in (0.05, 1.1):
+            with self.assertRaises(PlanError):
+                _trans(Look(trans="fade", trans_d=bad), [4.0, 4.0])
+
     def test_too_long(self):
         with self.assertRaises(PlanError):
             _trans(Look(trans="fade", trans_d=1.0), [4.0, 1.5])

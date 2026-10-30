@@ -900,7 +900,7 @@ def render_timeline(plans: list[str]) -> None:
         t1, t2, t3 = st.columns([2, 2, 3], vertical_alignment="center")
         tname = TRANS_UI[t1.selectbox("Transition", list(TRANS_UI), key="exp_trans", label_visibility="collapsed",
                                       help="Entre les scènes de la vidéo assemblée ; raccourcit la vidéo d'une durée par coupe.")]
-        td = t2.slider("Durée de transition", 0.2, 2.0, 0.5, 0.1, key="exp_trans_d", disabled=tname == "none",
+        td = t2.slider("Durée de transition", 0.1, 1.0, 0.5, 0.1, key="exp_trans_d", disabled=tname == "none",
                        label_visibility="collapsed", format="%.1f s")
         over: dict = {}
         if sp != 1.0:

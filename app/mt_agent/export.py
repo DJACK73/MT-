@@ -41,7 +41,7 @@ class Look:
     zoom_only: frozenset[int] | None = None  # None = toutes les scènes ; sinon seulement ces scènes (n° du plan, base 1)
     speed: float = 1.0  # vitesse de lecture de toute la vidéo, 0.5..2 ; 1 = normale (setpts + atempo)
     trans: Literal["none", "fade", "fadeblack", "slide"] = "none"  # transition entre scènes (export assemblé seulement)
-    trans_d: float = 0.5  # durée de la transition (s), 0.2..2, et <= moitié de la scène la plus courte
+    trans_d: float = 0.5  # durée de la transition (s), 0.1..1, et <= moitié de la scène la plus courte
     bright: float = 0.0  # étalonnage global : luminosité, -0.3..0.3 (eq)
     contrast: float = 1.0  # contraste, 0.5..1.5
     sat: float = 1.0  # saturation, 0..2
@@ -262,8 +262,8 @@ def _trans(look: Look | None, durs: list[float]) -> tuple[str | None, float]:
     if name == "none" or len(durs) < 2:
         return None, 0.0
     td = look.trans_d
-    if not 0.2 <= td <= 2.0:
-        raise PlanError(f"durée de transition hors de 0.2..2 s: {td}")
+    if not 0.1 <= td <= 1.0:
+        raise PlanError(f"durée de transition hors de 0.1..1 s: {td}")
     if look.snap_beats:
         raise PlanError("transition : incompatible avec le calage sur les battements (non validé)")
     if td > min(durs) / 2:
