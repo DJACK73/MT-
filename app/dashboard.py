@@ -674,7 +674,7 @@ def render_guide(has_plan: bool) -> None:
         if not has_plan:
             st.caption("Dépose une vidéo dans inbox/, puis lance la découpe dans ① Découper.")
         else:
-            st.caption("① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Timeline : "
+            st.caption("① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : "
                        "coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), nettoyage (⑤).")
         st.caption("③ : **Sélection** (cases, miroir, zoom) → **Actions** (appliquer, approuver). ④ : **Réglages** (cadrage, son) → **Export** (vitesse, qualité, exports).")
         st.caption("Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.")
@@ -696,7 +696,7 @@ def main() -> None:
     plans = list_plans(PLANS)
     fresh = [q for q in st.session_state.get("last_cut", []) if q in plans]
     plans = fresh + [q for q in plans if q not in fresh]
-    t_scan, t_cmp, t_plan, t_tl, t_clean = st.tabs(["① Découper", "② Composer", "③ Sélection", "④ Timeline", "⑤ Nettoyage"], key="tabs_main", on_change="rerun")
+    t_scan, t_cmp, t_plan, t_tl, t_clean = st.tabs(["① Découper", "② Composer", "③ Sélection", "④ Export", "⑤ Nettoyage"], key="tabs_main", on_change="rerun")
     with t_scan:
         render_scan()
     with t_cmp:
@@ -744,7 +744,7 @@ def render_plan(plans: list[str]) -> None:
     elif plan.status == "rendered":
         st.success("Plan déjà rendu.")
     elif approved:
-        st.success("Approuvé : réglages et export dans ④ Timeline.")
+        st.success("Approuvé : réglages et export dans ④ Export.")
     elif plan.status == "approved":
         st.warning("Plan modifié depuis l'approbation : approbation invalide.")
     elif not saved_any:
@@ -852,24 +852,27 @@ def render_timeline(plans: list[str]) -> None:
         st.warning("Sélection modifiée depuis l'approbation : retourne dans ③.")
     with st.container(border=True):
         st.markdown("**Frise**")
-        kept_idx = [i for i, sc in enumerate(plan.scenes) if sc.selected]
-        if not kept_idx:
-            st.caption("Aucune scène gardée : coche des scènes dans ③ puis « Appliquer la sélection ».")
+        if not st.toggle("Afficher la frise (facultatif)", key="show_frise"):
+            st.caption("Frise masquée : réglages et exports restent disponibles ci-dessous.")
         else:
-            fthumbs = make_thumbnails(plan, ROOT)
-            fids = [x.id for x in plan.sources]
-            items = []
-            for idx in kept_idx:
-                sc = plan.scenes[idx]
-                th = fthumbs[idx] if idx < len(fthumbs) else None
-                ftag = letter(fids.index(sc.source_id)) if len(fids) > 1 and sc.source_id in fids else ""
-                items.append({"uri": _thumb_uri(str(th), th.stat().st_mtime_ns) if th else None,
-                              "dur": sc.end - sc.start,
-                              "label": f"{ftag}{idx + 1} · {sc.end - sc.start:.1f} s"
-                                       + (" ⇋" if st.session_state.get(f"mir:{pk}:{idx + 1}") else "")
-                                       + (" 🔍" if st.session_state.get(f"zoom:{pk}:{idx + 1}") else "")})
-            st.markdown(FRISE_CSS + frise_html(items), unsafe_allow_html=True)
-            st.caption(f"{len(kept_idx)} scènes gardées · largeur = durée. Chaque ▸ est une coupe ; la transition choisie dans Export s'applique à toutes.")
+            kept_idx = [i for i, sc in enumerate(plan.scenes) if sc.selected]
+            if not kept_idx:
+                st.caption("Aucune scène gardée : coche des scènes dans ③ puis « Appliquer la sélection ».")
+            else:
+                fthumbs = make_thumbnails(plan, ROOT)
+                fids = [x.id for x in plan.sources]
+                items = []
+                for idx in kept_idx:
+                    sc = plan.scenes[idx]
+                    th = fthumbs[idx] if idx < len(fthumbs) else None
+                    ftag = letter(fids.index(sc.source_id)) if len(fids) > 1 and sc.source_id in fids else ""
+                    items.append({"uri": _thumb_uri(str(th), th.stat().st_mtime_ns) if th else None,
+                                  "dur": sc.end - sc.start,
+                                  "label": f"{ftag}{idx + 1} · {sc.end - sc.start:.1f} s"
+                                           + (" ⇋" if st.session_state.get(f"mir:{pk}:{idx + 1}") else "")
+                                           + (" 🔍" if st.session_state.get(f"zoom:{pk}:{idx + 1}") else "")})
+                st.markdown(FRISE_CSS + frise_html(items), unsafe_allow_html=True)
+                st.caption(f"{len(kept_idx)} scènes gardées · largeur = durée. Chaque ▸ est une coupe ; la transition choisie dans Export s'applique à toutes.")
     with st.container(border=True):
         st.markdown("**Réglages**")
         with st.expander("Cadrage et format"):
