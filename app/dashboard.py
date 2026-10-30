@@ -514,6 +514,8 @@ def _show_thumb(th: "Path | None") -> None:
         st.image(str(th))
 
 
+TRANS_UI = {"Transition : Aucune": "none", "Transition : Fondu": "fade",
+            "Transition : Fondu noir": "fadeblack", "Transition : Glissement": "slide"}
 QUALITY = {"Qualité : Normal": 20, "Qualité : Haute": 16}  # CRF x264 ; plus bas = meilleur et plus gros
 SPEED = {"Vitesse : 0,5×": 0.5, "Vitesse : 0,75×": 0.75, "Vitesse : 1×": 1.0,
          "Vitesse : 1,25×": 1.25, "Vitesse : 1,5×": 1.5, "Vitesse : 2×": 2.0}
@@ -867,7 +869,7 @@ def render_timeline(plans: list[str]) -> None:
                                        + (" ⇋" if st.session_state.get(f"mir:{pk}:{idx + 1}") else "")
                                        + (" 🔍" if st.session_state.get(f"zoom:{pk}:{idx + 1}") else "")})
             st.markdown(FRISE_CSS + frise_html(items), unsafe_allow_html=True)
-            st.caption(f"{len(kept_idx)} scènes gardées · largeur = durée. Chaque ▸ est une coupe : les transitions s'y placeront.")
+            st.caption(f"{len(kept_idx)} scènes gardées · largeur = durée. Chaque ▸ est une coupe ; la transition choisie dans Export s'applique à toutes.")
     with st.container(border=True):
         st.markdown("**Réglages**")
         with st.expander("Cadrage et format"):
@@ -892,12 +894,33 @@ def render_timeline(plans: list[str]) -> None:
         sp = SPEED[q3.selectbox("Vitesse", list(SPEED), index=2, key="exp_speed", label_visibility="collapsed", help="Toute la vidéo, à l'export et dans « ▶ voir » (pas les vignettes). Ralenti = images répétées, sans interpolation.")]
         crf = QUALITY[q2.selectbox("Qualité", list(QUALITY), key="exp_quality", label_visibility="collapsed",
                                    help="Normal = CRF 20 (comme avant). Haute = CRF 16 : fichier plus gros, même vitesse.")]
+        t1, t2, t3 = st.columns([2, 2, 3], vertical_alignment="center")
+        tname = TRANS_UI[t1.selectbox("Transition", list(TRANS_UI), key="exp_trans", label_visibility="collapsed",
+                                      help="Entre les scènes de la vidéo assemblée ; raccourcit la vidéo d'une durée par coupe.")]
+        td = t2.slider("Durée de transition", 0.2, 2.0, 0.5, 0.1, key="exp_trans_d", disabled=tname == "none",
+                       label_visibility="collapsed", format="%.1f s")
+        over: dict = {}
         if sp != 1.0:
+            over["speed"] = sp
+        if tname != "none":
+            over["trans"], over["trans_d"] = tname, td
+        if over:
             import dataclasses
-            look = dataclasses.replace(look, speed=sp)
+            look = dataclasses.replace(look, **over)
+        bad = ""
+        if tname != "none":
+            from mt_agent.approval import PlanError
+            from mt_agent.export import _trans
+            try:
+                _trans(look, [(sc.end - sc.start) / sp for sc in plan.scenes if sc.selected])
+            except PlanError as e:
+                bad = str(e)
+            t3.caption("Export assemblé seulement (pas les clips séparés).")
+        if bad:
+            st.warning(bad)
         e1, e2 = st.columns(2)
         go_video = e1.button("Exporter la vidéo assemblée", key="b_exp_video", type="primary" if approved and not dirty else "secondary",
-                             disabled=not approved or dirty)
+                             disabled=not approved or dirty or bool(bad))
         go_clips = e2.button("Exporter en clips séparés", key="b_exp_clips", disabled=not approved or dirty)
         if approved and not dirty and not none:
             st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
