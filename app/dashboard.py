@@ -516,7 +516,10 @@ def _show_thumb(th: "Path | None") -> None:
 
 
 TRANS_UI = {"Transition : Aucune": "none", "Transition : Fondu": "fade",
-            "Transition : Fondu noir": "fadeblack", "Transition : Glissement": "slide"}
+            "Transition : Fondu noir": "fadeblack", "Transition : Fondu blanc": "fadewhite",
+            "Transition : Glissement": "slide", "Transition : Glissement haut": "slideup",
+            "Transition : Dissolution": "dissolve", "Transition : Pixelisation": "pixelize",
+            "Transition : Flou": "hblur"}
 QUALITY = {"Qualité : Normal": 20, "Qualité : Haute": 16}  # CRF x264 ; plus bas = meilleur et plus gros
 SPEED = {"Vitesse : 0,5×": 0.5, "Vitesse : 0,75×": 0.75, "Vitesse : 1×": 1.0,
          "Vitesse : 1,25×": 1.25, "Vitesse : 1,5×": 1.5, "Vitesse : 2×": 2.0}

@@ -40,7 +40,8 @@ class Look:
     zoom: float = 1.0  # zoom fixe centré sur toute la vidéo, 1..2 ; 1 = aucun ; refusé avec fit="none"
     zoom_only: frozenset[int] | None = None  # None = toutes les scènes ; sinon seulement ces scènes (n° du plan, base 1)
     speed: float = 1.0  # vitesse de lecture de toute la vidéo, 0.5..2 ; 1 = normale (setpts + atempo)
-    trans: Literal["none", "fade", "fadeblack", "slide"] = "none"  # transition entre scènes (export assemblé seulement)
+    trans: Literal["none", "fade", "fadeblack", "fadewhite", "slide", "slideup",
+                   "dissolve", "pixelize", "hblur"] = "none"  # transition entre scènes (export assemblé seulement)
     trans_d: float = 0.5  # durée de la transition (s), 0.1..1, et <= moitié de la scène la plus courte
     bright: float = 0.0  # étalonnage global : luminosité, -0.3..0.3 (eq)
     contrast: float = 1.0  # contraste, 0.5..1.5
@@ -251,7 +252,9 @@ def _check_fx(plan: Plan, look: Look | None) -> None:
         raise PlanError(f"effets : scènes hors de 1..{len(plan.scenes)}: {bad}")
 
 
-TRANS = {"none": None, "fade": "fade", "fadeblack": "fadeblack", "slide": "slideleft"}
+TRANS = {"none": None, "fade": "fade", "fadeblack": "fadeblack", "fadewhite": "fadewhite",
+         "slide": "slideleft", "slideup": "slideup", "dissolve": "dissolve",
+         "pixelize": "pixelize", "hblur": "hblur"}
 
 
 def _trans(look: Look | None, durs: list[float]) -> tuple[str | None, float]:
