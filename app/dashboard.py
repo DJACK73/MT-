@@ -453,7 +453,8 @@ def on_compose() -> None:
 
 def render_compose(plans: list[str]) -> None:
     if len(plans) < 2:
-        st.caption("Il faut au moins 2 plans (un par vidéo) pour composer un montage.")
+        st.caption("Il faut au moins 2 plans (un par vidéo) pour composer un montage. "
+                   "Seuls les plans coupés en ① depuis le chargement de la page apparaissent ici.")
         return
     with st.container():
         names = lambda q: list(_plan_sources(*_plan_key(q)))
@@ -691,7 +692,7 @@ def main() -> None:
     with t_scan:
         render_scan()
     with t_cmp:
-        render_compose(plans)
+        render_compose(fresh)
     with t_plan:
         if plans:
             render_plan(plans)

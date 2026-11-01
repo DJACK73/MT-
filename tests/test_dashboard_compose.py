@@ -39,10 +39,16 @@ class DashboardCompose(unittest.TestCase):
         self.enterContext(patch("mt_agent.paths.ROOT", self.r))
 
     def _open(self):
-        at = AppTest.from_file(str(APP), default_timeout=120).run()
-        self.assertEqual(len(at.exception), 0)
+        at = AppTest.from_file(str(APP), default_timeout=120)
+        at.session_state["last_cut"] = [self.pa, self.pb]  # ② ne montre que les plans coupés en ①
+        at.run()
         self.assertEqual(len(at.exception), 0)
         return at
+
+    def test_compose_vide_sans_decoupe_recente(self) -> None:
+        at = AppTest.from_file(str(APP), default_timeout=120).run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual([c for c in at.checkbox if str(c.key).startswith("cmpp:")], [])
 
     def _ck(self, at, p: str, n: int):
         return at.checkbox(key=f"cmp:{Path(p).name}:{n}")
