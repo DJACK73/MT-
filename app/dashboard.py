@@ -105,18 +105,31 @@ def load(p: Path) -> Plan:
     return Plan.model_validate_json(p.read_text())
 
 
+def _plan_key(p: "str | Path") -> tuple[str, int, int]:
+    s = Path(p).stat()
+    return str(p), s.st_mtime_ns, s.st_size
+
+
+@st.cache_data(show_spinner=False)
+def _plan_ok(path: str, mtime_ns: int, size: int) -> bool:
+    """Plan lisible ? Mis en cache par (chemin, mtime, taille) : plus de relecture JSON à chaque rerun."""
+    try:
+        load(Path(path))
+    except ERRORS:
+        return False
+    return True
+
+
+@st.cache_data(show_spinner=False)
+def _plan_sources(path: str, mtime_ns: int, size: int) -> tuple[str, ...]:
+    return tuple(Path(s.path).name for s in load(Path(path)).sources)
+
+
 def list_plans(d: Path) -> list[str]:
     if not d.is_dir():
         return []
     files = sorted((x for x in d.iterdir() if x.is_file()), key=lambda x: x.stat().st_mtime, reverse=True)
-    out: list[str] = []
-    for p in files:
-        try:
-            load(p)
-        except ERRORS:
-            continue
-        out.append(str(p))
-    return out
+    return [str(p) for p in files if _plan_ok(*_plan_key(p))]
 
 
 def _flash(kind: str, msg: str) -> None:
@@ -225,7 +238,7 @@ def cut_names() -> set[str]:
     """Noms des vidéos déjà présentes comme source d'au moins un plan."""
     out: set[str] = set()
     for p in list_plans(PLANS):
-        out.update(Path(s.path).name for s in load(Path(p)).sources)
+        out.update(_plan_sources(*_plan_key(p)))
     return out
 
 
@@ -443,7 +456,7 @@ def render_compose(plans: list[str]) -> None:
         st.caption("Il faut au moins 2 plans (un par vidéo) pour composer un montage.")
         return
     with st.container():
-        names = lambda q: [Path(s.path).name for s in load(Path(q)).sources]
+        names = lambda q: list(_plan_sources(*_plan_key(q)))
         chosen = []
         for p in sorted(plans, key=names):
             if st.checkbox(plan_label(p), value=len(names(p)) == 1, key=f"cmpp:{Path(p).name}"):
