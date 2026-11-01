@@ -50,14 +50,7 @@ CSS = (
     "[class*='st-key-b_mir_'] button:hover{border-color:#7c3aed}"
     "[class*='st-key-b_mir_'] button p{color:inherit}"
     "[class*='st-key-b_mir_'] button[data-testid='stBaseButton-primary']{background:#7c3aed!important;border-color:#7c3aed;color:#fff!important}"
-    "[class*='st-key-b_zm_'] button{background:#0e1117!important;border:1px solid #eab30880;color:#eab308!important;border-radius:12px;font-weight:600}"
-    "[class*='st-key-b_zm_'] button:hover{border-color:#eab308}"
-    "[class*='st-key-b_zm_'] button p{color:inherit}"
-    "[class*='st-key-b_zm_'] button[data-testid='stBaseButton-primary']{background:#eab308!important;border-color:#eab308;color:#000!important}"
     "[data-testid='stImage']{overflow:hidden}"
-    "[class*='st-key-card_']:has([class*='st-key-zm_'] input:checked){border:2px solid #eab308}"
-    "[class*='st-key-card_']:has([class*='st-key-zm_'] input:checked) [data-testid='stImage'] img{transform:scale(var(--zv,1.5))}"
-    "[class*='st-key-card_']:has([class*='st-key-mir_'] input:checked):has([class*='st-key-zm_'] input:checked) [data-testid='stImage'] img{transform:scaleX(-1) scale(var(--zv,1.5))}"
     "[class*='st-key-b_ok'] button{background:#0e1117!important;border:1px solid #2563eb80;color:#2563eb!important;border-radius:12px;font-weight:600}"
     "[class*='st-key-b_ok'] button:hover{border-color:#2563eb}"
     "[class*='st-key-b_ok'] button p{color:inherit}"
@@ -202,16 +195,14 @@ def show_clip() -> None:
     srcs = {x.id: Path(x.path) if Path(x.path).is_absolute() else ROOT / x.path for x in plan.sources}
     kept = bool(st.session_state.get(f"sel:{path.name}:{i}", sc.selected))
     mir = bool(st.session_state.get(f"mir:{path.name}:{i}", False))
-    zoom = 1.0 if not st.session_state.get(f"zoom:{path.name}:{i}") or str(st.session_state.get("look_fit", "")).startswith("Aucun") \
-        else min(max(int(st.session_state.get("look_zoom", 100)), 100), 200) / 100
     spd = SPEED.get(str(st.session_state.get("exp_speed", "")), 1.0)
     st.markdown(f"**Scène {i}/{n}** · {sc.end - sc.start:.2f} s · " + (":green[✓ gardée]" if kept else ":red[✗ non gardée]")
-                + (" · :blue[**⇋ miroir**]" if mir else "") + (f" · :orange[**🔍 zoom {zoom * 100:.0f} %**]" if zoom != 1.0 else "")
+                + (" · :blue[**⇋ miroir**]" if mir else "")
                 + (f" · :violet[**⏩ {spd:g}×**]" if spd != 1.0 else ""))
     st.caption(f"{sc.start:.2f} → {sc.end:.2f} s dans la source")
     try:
         with st.spinner("Préparation de l'aperçu…"):
-            clip = preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT, mirror=mir, zoom=zoom, speed=spd)
+            clip = preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT, mirror=mir, speed=spd)
         st.video(str(clip))
     except Exception as e:  # bord UI : afficher l'erreur sans planter la page
         st.error(f"Aperçu impossible : {e}")
@@ -354,12 +345,6 @@ def on_mir_all(value: bool) -> None:
     path = Path(st.session_state["plan_path"])
     for i in range(1, len(load(path).scenes) + 1):
         st.session_state[f"mir:{path.name}:{i}"] = value
-
-
-def on_zoom_all(value: bool) -> None:
-    path = Path(st.session_state["plan_path"])
-    for i in range(1, len(load(path).scenes) + 1):
-        st.session_state[f"zoom:{path.name}:{i}"] = value
 
 
 CLEAN_LABELS = {
@@ -588,10 +573,6 @@ def render_frame() -> tuple[dict, bool]:
         fmt = st.radio("Format", FORMATS, key="look_ratio", horizontal=True)
         if fmt != FORMATS[0]:
             kw["ratio"] = fmt
-    z = st.slider("Zoom", 100, 200, 100, step=5, key="look_zoom", format="%d %%",
-                  help="Zoom fixe, centré. Appliqué aux scènes cochées « zoom ». 100 % = aucun.")
-    if z != 100:
-        kw["zoom"] = z / 100
     return kw, none
 
 
@@ -674,7 +655,7 @@ def render_guide(has_plan: bool) -> None:
         else:
             st.caption("① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : "
                        "coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), nettoyage (⑤).")
-        st.caption("③ : **Sélection** (cases, miroir, zoom) → **Actions** (appliquer, approuver). ④ : **Réglages** (cadrage, son) → **Export** (vitesse, qualité, exports).")
+        st.caption("③ : **Sélection** (cases, miroir) → **Actions** (appliquer, approuver). ④ : **Réglages** (cadrage, son) → **Export** (vitesse, qualité, exports).")
         st.caption("Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.")
         if mode == "Musique ajoutée":
             st.caption("Calage : la fin d'une scène recule jusqu'à un battement, jamais sous la durée minimale ; "
@@ -757,15 +738,12 @@ def render_plan(plans: list[str]) -> None:
         t2.button("Tout décocher", key="b_cb_none", on_click=on_all, args=(False,))
         t3.button("Inverser", key="b_cb_inv", on_click=on_invert)
         t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
-        nz = sum(1 for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"zoom:{pk}:{i}"))
-        m1, m2, z1, z2, c5 = st.columns([1, 1, 1, 1, 2], vertical_alignment="center")
+        m1, m2, c5 = st.columns([1, 1, 2], vertical_alignment="center")
         m1.button("Miroir : toutes", key="b_mir_all", on_click=on_mir_all, args=(True,))
         m2.button("Miroir : aucune", key="b_mir_none", on_click=on_mir_all, args=(False,))
-        z1.button("Zoom : toutes", key="b_zm_all", on_click=on_zoom_all, args=(True,))
-        z2.button("Zoom : aucune", key="b_zm_none", on_click=on_zoom_all, args=(False,))
-        c5.caption(f"Miroir : {nm}/{len(flags)} · Zoom : {nz}/{len(flags)}",
-                   help="Case « miroir » et case « zoom » sur chaque vignette, appliquées à l'export (et dans « ▶ voir »). "
-                        "Niveau du zoom = curseur « Zoom » de « Cadrage et format ». Miroir non conservé au rechargement ; "
+        c5.caption(f"Miroir : {nm}/{len(flags)}",
+                   help="Case « miroir » sur chaque vignette, appliquée à l'export (et dans « ▶ voir »). "
+                        "Miroir non conservé au rechargement ; "
                         "il inverse aussi les textes de la source. Aperçu des vignettes approximatif.")
         with st.expander("Sélection par numéros (avancé)"):
             st.text_input("Sélection (ex. 1-5,8)", key="spec")
@@ -789,8 +767,6 @@ def render_plan(plans: list[str]) -> None:
     else:
         st.caption(f"Plan découpé en fenêtre {lo:g}–{mx:g} s : {bad} scène(s) hors fenêtre. ▼ trop courte, ▲ trop longue.")
     cols = st.columns(COLS)
-    zv = min(max(int(st.session_state.get("look_zoom", 100)), 100), 200) / 100
-    st.markdown(f"<style>:root{{--zv:{zv:g}}}</style>", unsafe_allow_html=True)
     ids = [x.id for x in plan.sources]
     for i, (sc, th) in enumerate(zip(plan.scenes, thumbs), 1):
         with cols[(i - 1) % COLS], st.container(border=True, key=f"card_{i}"):
@@ -801,24 +777,18 @@ def render_plan(plans: list[str]) -> None:
                    if len(ids) > 1 and sc.source_id in ids else "")
             k = f"sel:{pk}:{i}"
             km = f"mir:{pk}:{i}"
-            kz = f"zoom:{pk}:{i}"
             if k not in st.session_state:
                 st.session_state[k] = sc.selected
             if km not in st.session_state:
                 st.session_state[km] = False
-            if kz not in st.session_state:
-                st.session_state[kz] = False
             flip = bool(st.session_state[km])
-            zmd = bool(st.session_state[kz])
             st.caption(tag + f"**{i}** · {dur:.2f} s" + (f" :orange[**{flag}**]" if flag else "")
-                       + (" · :blue[**⇋ miroir**]" if flip else "") + (" · :orange[**🔍 zoom**]" if zmd else ""))
+                       + (" · :blue[**⇋ miroir**]" if flip else ""))
             g, m = st.columns([1, 1])
             with g, st.container(key=f"keep_{i}"):
                 st.checkbox("garder", key=k)
             with m, st.container(key=f"mir_{i}"):
                 st.checkbox("miroir", key=km)
-            with st.container(key=f"zm_{i}"):
-                st.checkbox("zoom", key=kz)
             with st.container(key=f"voir_{i}"):
                 clicked = st.button("▶ voir", key=f"v:{pk}:{i}")
             if clicked:
@@ -868,7 +838,7 @@ def render_timeline(plans: list[str]) -> None:
                                   "dur": sc.end - sc.start,
                                   "label": f"{ftag}{idx + 1} · {sc.end - sc.start:.1f} s"
                                            + (" ⇋" if st.session_state.get(f"mir:{pk}:{idx + 1}") else "")
-                                           + (" 🔍" if st.session_state.get(f"zoom:{pk}:{idx + 1}") else "")})
+                                           + ""})
                 st.markdown(FRISE_CSS + frise_html(items), unsafe_allow_html=True)
                 st.caption(f"{len(kept_idx)} scènes gardées · largeur = durée. Chaque ▸ est une coupe.")
     with st.container(border=True):
@@ -878,12 +848,6 @@ def render_timeline(plans: list[str]) -> None:
         mir = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
         if mir:
             kw["mirror_only"] = mir
-        zms = frozenset(i for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"zoom:{pk}:{i}"))
-        if "zoom" in kw:
-            if zms:
-                kw["zoom_only"] = zms
-            else:
-                kw.pop("zoom")
         if none and len({sc.source_id for sc in plan.scenes if sc.selected}) > 1:
             st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
         kw.update(render_sound(plan))
