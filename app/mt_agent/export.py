@@ -40,11 +40,6 @@ class Look:
     zoom: float = 1.0  # zoom fixe centré sur toute la vidéo, 1..2 ; 1 = aucun ; refusé avec fit="none"
     zoom_only: frozenset[int] | None = None  # None = toutes les scènes ; sinon seulement ces scènes (n° du plan, base 1)
     speed: float = 1.0  # vitesse de lecture de toute la vidéo, 0.5..2 ; 1 = normale (setpts + atempo)
-    bright: float = 0.0  # étalonnage global : luminosité, -0.3..0.3 (eq)
-    contrast: float = 1.0  # contraste, 0.5..1.5
-    sat: float = 1.0  # saturation, 0..2
-    fx: frozenset[str] = frozenset()  # effets : parmi FX (bw, vignette, blur, grain)
-    fx_only: frozenset[int] | None = None  # None = toutes les scènes ; sinon seulement ces scènes (n° du plan, base 1)
 
 
 def _size(plan: Plan, look: Look | None) -> tuple[int, int]:
@@ -217,38 +212,6 @@ def _speed(look: Look | None) -> float:
     return sp
 
 
-FX = {"bw": "hue=s=0", "vignette": "vignette", "blur": "gblur=sigma=2", "grain": "noise=alls=12:allf=t"}
-
-
-def _fx(look: Look | None, n: int) -> str:
-    """Étalonnage global puis effets de la scène n° n (base 1), en filtres séparés par des virgules."""
-    if not look:
-        return ""
-    parts: list[str] = []
-    if (look.bright, look.contrast, look.sat) != (0.0, 1.0, 1.0):
-        parts.append(f"eq=brightness={look.bright:g}:contrast={look.contrast:g}:saturation={look.sat:g}")
-    if look.fx and (look.fx_only is None or n in look.fx_only):
-        parts += [FX[k] for k in FX if k in look.fx]
-    return ",".join(parts)
-
-
-def _check_fx(plan: Plan, look: Look | None) -> None:
-    if not look:
-        return
-    if not -0.3 <= look.bright <= 0.3:
-        raise PlanError(f"luminosité hors de -0.3..0.3: {look.bright}")
-    if not 0.5 <= look.contrast <= 1.5:
-        raise PlanError(f"contraste hors de 0.5..1.5: {look.contrast}")
-    if not 0.0 <= look.sat <= 2.0:
-        raise PlanError(f"saturation hors de 0..2: {look.sat}")
-    unknown = sorted(set(look.fx) - set(FX))
-    if unknown:
-        raise PlanError(f"effet inconnu: {unknown}")
-    bad = sorted(n for n in (look.fx_only or ()) if not 1 <= n <= len(plan.scenes))
-    if bad:
-        raise PlanError(f"effets : scènes hors de 1..{len(plan.scenes)}: {bad}")
-
-
 def _join(n: int, with_a: bool) -> list[str]:
     """Assemble les nœuds v{i}/a{i} par concat (coupe franche)."""
     if with_a:
@@ -271,13 +234,13 @@ def _anode(i: int, j: int, s: float, e: float, speed: float = 1.0) -> str:
 
 
 def _node(i: int, j: int, s: float, e: float, framing: str, w: int, h: int,
-          bg: str = "blur", cx: float = 0.5, mirror: bool = False, zoom: float = 1.0, speed: float = 1.0, fx: str = "") -> str:
-    tail = f"{fx},{_TAIL}" if fx else _TAIL
+          bg: str = "blur", cx: float = 0.5, mirror: bool = False, zoom: float = 1.0, speed: float = 1.0) -> str:
+    tail = _TAIL
     flip = ",hflip" if mirror else ""
     pts = "PTS-STARTPTS" if speed == 1.0 else f"(PTS-STARTPTS)/{speed:g}"
     head = f"[{j}:v]trim=start={s:.3f}:end={e:.3f},setpts={pts}{flip}"
     if framing == "none":  # trim seul : ni scale, ni pad, ni flou, ni fps
-        return f"{head}{',' + fx if fx else ''},format=yuv420p[v{i}]"
+        return f"{head},format=yuv420p[v{i}]"
     if zoom != 1.0:  # zoom fixe centré, avant tout scale (fond flou et premier plan le reçoivent)
         head += f",crop=trunc(iw/{zoom:g}/2)*2:trunc(ih/{zoom:g}/2)*2"
     pos = "" if cx == 0.5 else f":(iw-ow)*{cx:.3f}:(ih-oh)/2"
@@ -313,11 +276,10 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
                         "(tailles possiblement différentes) ; utiliser les clips séparés")
     _check_mirror(plan, look)
     _check_zoom(plan, look)
-    _check_fx(plan, look)
     sp = _speed(look)
     nums = [n for n, s in enumerate(plan.scenes, 1) if s.selected]
     nodes = [_node(i, order.index(sc.source_id), sc.start, sc.end, fr, w, h, bg, cx,
-                   _flip(look, nums[i]), _zoom(look, nums[i]), sp, _fx(look, nums[i]))
+                   _flip(look, nums[i]), _zoom(look, nums[i]), sp)
              for i, sc in enumerate(chosen)]
     with_a, db = _audio(look)
     use_m, mpath, mstart, mdb, mfade = _music(look)
@@ -425,7 +387,6 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         _check_music(mfile, mstart)
     _check_mirror(plan, look)
     _check_zoom(plan, look)
-    _check_fx(plan, look)
     sp = _speed(look)
     tempo = f"atempo={sp:g}," if sp != 1.0 else ""
     ends = _clip_snap(look, root, [(sc.end - sc.start) / sp for _, sc in chosen])
@@ -447,7 +408,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     for k, (n, sc) in enumerate(chosen, 1):
         d = ends[k - 1]  # durée de sortie
         dsrc = d * sp  # durée lue dans la source
-        node = _node(0, 0, 0.0, dsrc, fr, w, h, bg, cx, _flip(look, n), _zoom(look, n), sp, _fx(look, n))
+        node = _node(0, 0, 0.0, dsrc, fr, w, h, bg, cx, _flip(look, n), _zoom(look, n), sp)
         args = ["-ss", f"{sc.start:.3f}", "-t", f"{dsrc:.3f}", "-i", str(srcs[sc.source_id]),
                 "-filter_complex", node, "-map", "[v0]"]
         if use_m:  # musique : 2e entrée bouclée, coupée net à la durée du clip

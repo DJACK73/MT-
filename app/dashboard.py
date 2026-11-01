@@ -19,7 +19,6 @@ from mt_agent.preview import preview_clip
 from mt_agent.fit import window_flag
 from mt_agent.clean import plan_clean, run_clean, size_of
 from mt_agent.timeline import FRISE_CSS, frise_html
-from mt_agent.grade import FX_UI, fx_cost, grade_kw
 
 PLANS = ROOT / "workspace" / "plans"
 ERRORS = (PlanError, ValidationError, ValueError, OSError, RuntimeError, MediaError)
@@ -834,21 +833,6 @@ def _thumb_uri(path: str, mtime_ns: int) -> str:
     return f"data:{mime};base64," + base64.b64encode(Path(path).read_bytes()).decode()
 
 
-def render_grade() -> dict:
-    """Étalonnage global et effets, toutes les scènes. Retourne les kwargs de Look (défauts omis)."""
-    c1, c2, c3 = st.columns(3)
-    b = c1.slider("Luminosité", -30, 30, 0, step=5, key="grade_bright", format="%d %%")
-    c = c2.slider("Contraste", 50, 150, 100, step=5, key="grade_contrast", format="%d %%")
-    s = c3.slider("Saturation", 0, 200, 100, step=10, key="grade_sat", format="%d %%")
-    on: list[str] = []
-    for col, (k, lab) in zip(st.columns(len(FX_UI)), FX_UI.items()):
-        if col.checkbox(lab, key=f"grade_fx_{k}"):
-            on.append(k)
-    st.caption("Toutes les scènes, assemblé et clips séparés ; visible à l'export, pas dans « ▶ voir ». "
-               "Rendu plus long : grain ≈ ×2, vignette et flou ≈ +50 %.")
-    return grade_kw(b, c, s, on)
-
-
 def render_timeline(plans: list[str]) -> None:
     cur = st.session_state.get("plan_path")
     path = Path(cur if cur in plans else plans[0])
@@ -903,8 +887,6 @@ def render_timeline(plans: list[str]) -> None:
         if none and len({sc.source_id for sc in plan.scenes if sc.selected}) > 1:
             st.warning("Cadrage « Aucun » avec plusieurs vidéos : seul l'export en clips séparés est possible.")
         kw.update(render_sound(plan))
-        with st.expander("Étalonnage et effets"):
-            kw.update(render_grade())
         look = Look(**kw)
     with st.container(border=True):
         st.markdown("**Export**")
@@ -921,7 +903,7 @@ def render_timeline(plans: list[str]) -> None:
                              disabled=not approved or dirty)
         go_clips = e2.button("Exporter en clips séparés", key="b_exp_clips", disabled=not approved or dirty)
         if approved and not dirty and not none:
-            st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60 * fx_cost(kw)))} min au plus (mesuré avec le cadrage flou).")
+            st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
     if go_video:
         _export_video(plan, look, crf)
     if go_clips:
