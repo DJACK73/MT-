@@ -7,7 +7,7 @@ from mt_agent.approval import PlanError, approve, is_approved, plan_id, save_pla
 from mt_agent.cmd import scan_video
 from mt_agent.manual import MANUAL_MIN, manual_plan
 from mt_agent.ffx import MediaError, has_audio
-from mt_agent.export import TRANS, Look, export_clips, export_plan
+from mt_agent.export import Look, export_clips, export_plan
 from mt_agent.models import Options, Plan
 from mt_agent.paths import ROOT
 from mt_agent.selection import select_scenes
@@ -16,7 +16,6 @@ from mt_agent.thumbs import make_thumbnails
 from mt_agent.selection import parse_selection
 from mt_agent.selection import spec_from_flags
 from mt_agent.preview import preview_clip
-from mt_agent.preview_trans import Seg, preview_trans
 from mt_agent.fit import window_flag
 from mt_agent.clean import plan_clean, run_clean, size_of
 from mt_agent.timeline import FRISE_CSS, frise_html
@@ -221,36 +220,6 @@ def show_clip() -> None:
     c1.button("◀ Précédente", key="pv_prev", on_click=_pv_move, args=(-1, n), disabled=i <= 1)
     c2.button("Suivante ▶", key="pv_next", on_click=_pv_move, args=(1, n), disabled=i >= n)
     if st.button("OK, retour aux scènes", type="primary", key="pv_ok"):
-        st.rerun()
-
-
-@st.dialog("Aperçu de la transition", width="small")
-def show_trans(path_s: str, tr: str, td: float, spd: float) -> None:
-    path = Path(path_s)
-    plan = load(path)
-    ki = [k + 1 for k, sc in enumerate(plan.scenes) if sc.selected]
-    if len(ki) < 2:
-        st.info("Il faut au moins 2 scènes gardées.")
-        return
-    c = st.selectbox("Coupe", list(range(len(ki) - 1)),
-                     format_func=lambda n: f"Coupe {n + 1} : scène {ki[n]} → {ki[n + 1]}")
-    srcs = {x.id: Path(x.path) if Path(x.path).is_absolute() else ROOT / x.path for x in plan.sources}
-    nofit = str(st.session_state.get("look_fit", "")).startswith("Aucun")
-
-    def seg(k: int) -> Seg:
-        sc = plan.scenes[k - 1]
-        z = (1.0 if nofit or not st.session_state.get(f"zoom:{path.name}:{k}")
-             else min(max(int(st.session_state.get("look_zoom", 100)), 100), 200) / 100)
-        return Seg(srcs[sc.source_id], sc.start, sc.end, bool(st.session_state.get(f"mir:{path.name}:{k}", False)), z)
-
-    st.caption(f"{td:g} s" + (f" · ⏩ {spd:g}×" if spd != 1.0 else "") + " · basse résolution, sans cadrage ni effets")
-    try:
-        with st.spinner("Préparation de l'aperçu…"):
-            clip = preview_trans(seg(ki[c]), seg(ki[c + 1]), ROOT, tr, td, speed=spd)
-        st.video(str(clip))
-    except Exception as e:  # bord UI : afficher l'erreur sans planter la page
-        st.error(f"Aperçu impossible : {e}")
-    if st.button("OK, retour à l'export", type="primary", key="pvt_ok"):
         st.rerun()
 
 
@@ -546,11 +515,6 @@ def _show_thumb(th: "Path | None") -> None:
         st.image(str(th))
 
 
-TRANS_UI = {"Transition : Aucune": "none", "Transition : Fondu": "fade",
-            "Transition : Fondu noir": "fadeblack", "Transition : Fondu blanc": "fadewhite",
-            "Transition : Glissement": "slide", "Transition : Glissement haut": "slideup",
-            "Transition : Dissolution": "dissolve", "Transition : Pixelisation": "pixelize",
-            "Transition : Flou": "hblur"}
 QUALITY = {"Qualité : Normal": 20, "Qualité : Haute": 16}  # CRF x264 ; plus bas = meilleur et plus gros
 SPEED = {"Vitesse : 0,5×": 0.5, "Vitesse : 0,75×": 0.75, "Vitesse : 1×": 1.0,
          "Vitesse : 1,25×": 1.25, "Vitesse : 1,5×": 1.5, "Vitesse : 2×": 2.0}
@@ -922,7 +886,7 @@ def render_timeline(plans: list[str]) -> None:
                                            + (" ⇋" if st.session_state.get(f"mir:{pk}:{idx + 1}") else "")
                                            + (" 🔍" if st.session_state.get(f"zoom:{pk}:{idx + 1}") else "")})
                 st.markdown(FRISE_CSS + frise_html(items), unsafe_allow_html=True)
-                st.caption(f"{len(kept_idx)} scènes gardées · largeur = durée. Chaque ▸ est une coupe ; la transition choisie dans Export s'applique à toutes.")
+                st.caption(f"{len(kept_idx)} scènes gardées · largeur = durée. Chaque ▸ est une coupe.")
     with st.container(border=True):
         st.markdown("**Réglages**")
         with st.expander("Cadrage et format"):
@@ -949,37 +913,12 @@ def render_timeline(plans: list[str]) -> None:
         sp = SPEED[q3.selectbox("Vitesse", list(SPEED), index=2, key="exp_speed", label_visibility="collapsed", help="Toute la vidéo, à l'export et dans « ▶ voir » (pas les vignettes). Ralenti = images répétées, sans interpolation.")]
         crf = QUALITY[q2.selectbox("Qualité", list(QUALITY), key="exp_quality", label_visibility="collapsed",
                                    help="Normal = CRF 20 (comme avant). Haute = CRF 16 : fichier plus gros, même vitesse.")]
-        t1, t2, t3, t4 = st.columns([3, 3, 2, 3], vertical_alignment="center")
-        tname = TRANS_UI[t1.selectbox("Transition", list(TRANS_UI), key="exp_trans", label_visibility="collapsed",
-                                      help="Entre les scènes de la vidéo assemblée ; raccourcit la vidéo d'une durée par coupe.")]
-        td = t2.slider("Durée de transition", 0.1, 1.0, 0.5, 0.1, key="exp_trans_d", disabled=tname == "none",
-                       label_visibility="collapsed", format="%.1f s")
-        over: dict = {}
         if sp != 1.0:
-            over["speed"] = sp
-        if tname != "none":
-            over["trans"], over["trans_d"] = tname, td
-        if over:
             import dataclasses
-            look = dataclasses.replace(look, **over)
-        bad = ""
-        go_pv = False
-        if tname != "none":
-            from mt_agent.approval import PlanError
-            from mt_agent.export import _trans
-            try:
-                _trans(look, [(sc.end - sc.start) / sp for sc in plan.scenes if sc.selected])
-            except PlanError as e:
-                bad = str(e)
-            t4.caption("Export assemblé seulement (pas les clips séparés).")
-            go_pv = t3.button("▶ voir transition", key="b_pv_trans",
-                              disabled=bool(bad) or sum(sc.selected for sc in plan.scenes) < 2,
-                              help="Aperçu basse résolution de la jonction choisie (sans cadrage ni effets).")
-        if bad:
-            st.warning(bad)
+            look = dataclasses.replace(look, speed=sp)
         e1, e2 = st.columns(2)
         go_video = e1.button("Exporter la vidéo assemblée", key="b_exp_video", type="primary" if approved and not dirty else "secondary",
-                             disabled=not approved or dirty or bool(bad))
+                             disabled=not approved or dirty)
         go_clips = e2.button("Exporter en clips séparés", key="b_exp_clips", disabled=not approved or dirty)
         if approved and not dirty and not none:
             st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60 * fx_cost(kw)))} min au plus (mesuré avec le cadrage flou).")
@@ -987,8 +926,6 @@ def render_timeline(plans: list[str]) -> None:
         _export_video(plan, look, crf)
     if go_clips:
         _export_clips(plan, look, crf)
-    if go_pv:
-        show_trans(str(path), TRANS[tname], td, sp)
 
 
 main()

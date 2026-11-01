@@ -40,10 +40,6 @@ class Look:
     zoom: float = 1.0  # zoom fixe centré sur toute la vidéo, 1..2 ; 1 = aucun ; refusé avec fit="none"
     zoom_only: frozenset[int] | None = None  # None = toutes les scènes ; sinon seulement ces scènes (n° du plan, base 1)
     speed: float = 1.0  # vitesse de lecture de toute la vidéo, 0.5..2 ; 1 = normale (setpts + atempo)
-    trans: Literal["none", "fade", "fadeblack", "fadewhite", "slide", "slideup",
-                   "dissolve", "pixelize", "hblur"] = "none"  # transition entre scènes (export assemblé seulement)
-    trans_d: float = 0.5  # durée de la transition (s), 0.1..1, et <= moitié de la scène la plus courte
-    cuts: tuple[tuple[str, float], ...] = ()  # transition par coupe (nom de TRANS, durée s), une par coupe entre scènes gardées ; () = trans/trans_d partout
     bright: float = 0.0  # étalonnage global : luminosité, -0.3..0.3 (eq)
     contrast: float = 1.0  # contraste, 0.5..1.5
     sat: float = 1.0  # saturation, 0..2
@@ -253,118 +249,13 @@ def _check_fx(plan: Plan, look: Look | None) -> None:
         raise PlanError(f"effets : scènes hors de 1..{len(plan.scenes)}: {bad}")
 
 
-TRANS = {"none": None, "fade": "fade", "fadeblack": "fadeblack", "fadewhite": "fadewhite",
-         "slide": "slideleft", "slideup": "slideup", "dissolve": "dissolve",
-         "pixelize": "pixelize", "hblur": "hblur"}
-
-
-def _trans(look: Look | None, durs: list[float]) -> tuple[str | None, float]:
-    """(nom xfade, durée) ; (None, 0.0) = coupe franche. durs = durées de sortie des scènes."""
-    name = look.trans if look else "none"
-    if name not in TRANS:
-        raise PlanError(f"transition inconnue: {name}")
-    if name == "none" or len(durs) < 2:
-        return None, 0.0
-    td = look.trans_d
-    if not 0.1 <= td <= 1.0:
-        raise PlanError(f"durée de transition hors de 0.1..1 s: {td}")
-    if look.snap_beats:
-        raise PlanError("transition : incompatible avec le calage sur les battements (non validé)")
-    if td > min(durs) / 2:
-        raise PlanError(f"transition ({td:g} s) > moitié de la scène la plus courte ({min(durs):g} s)")
-    return TRANS[name], td
-
-
-def _join(durs: list[float], tr: str | None, td: float, with_a: bool) -> list[str]:
-    """Assemble les nœuds v{i}/a{i} : concat (coupe franche) ou chaîne xfade/acrossfade."""
-    n = len(durs)
-    if tr is None:
-        if with_a:
-            lab = "".join(f"[v{i}][a{i}]" for i in range(n))
-            return [f"{lab}concat=n={n}:v=1:a=1[out][ac]"]
-        lab = "".join(f"[v{i}]" for i in range(n))
-        return [f"{lab}concat=n={n}:v=1:a=0[out]"]
-    parts = [f"[v{i}]settb=AVTB[s{i}]" for i in range(n)]
-    prev, acc = "s0", durs[0]
-    for i in range(1, n):
-        lab = "out" if i == n - 1 else f"x{i}"
-        off = acc - td
-        parts.append(f"[{prev}][s{i}]xfade=transition={tr}:duration={td:g}:offset={off:.3f}[{lab}]")
-        prev, acc = lab, off + durs[i]
+def _join(n: int, with_a: bool) -> list[str]:
+    """Assemble les nœuds v{i}/a{i} par concat (coupe franche)."""
     if with_a:
-        prev = "a0"
-        for i in range(1, n):
-            lab = "ac" if i == n - 1 else f"ax{i}"
-            parts.append(f"[{prev}][a{i}]acrossfade=d={td:g}[{lab}]")
-            prev = lab
-    return parts
-
-
-def _cuts(look: Look | None, durs: list[float]) -> list[tuple[str | None, float]]:
-    """Une entrée (nom xfade | None, durée) par coupe (len(durs)-1). Look.cuts vide : trans/trans_d pour toutes."""
-    n = len(durs)
-    if n < 2 or look is None:
-        return [(None, 0.0)] * max(n - 1, 0)
-    if not look.cuts:
-        tr, td = _trans(look, durs)
-        return [(tr, td)] * (n - 1)
-    if len(look.cuts) != n - 1:
-        raise PlanError(f"transitions par coupe : {len(look.cuts)} fournie(s) pour {n - 1} coupe(s)")
-    out: list[tuple[str | None, float]] = []
-    for name, td in look.cuts:
-        if name not in TRANS:
-            raise PlanError(f"transition inconnue: {name}")
-        if name == "none":
-            out.append((None, 0.0))
-            continue
-        if not 0.1 <= td <= 1.0:
-            raise PlanError(f"durée de transition hors de 0.1..1 s: {td}")
-        out.append((TRANS[name], td))
-    if look.snap_beats and any(tr for tr, _ in out):
-        raise PlanError("transition : incompatible avec le calage sur les battements (non validé)")
-    for j, d in enumerate(durs):
-        near = (out[j - 1][1] if j > 0 else 0.0) + (out[j][1] if j < n - 1 else 0.0)
-        if near > d + 1e-9:
-            raise PlanError(f"transitions autour de la scène {j + 1} ({near:g} s) > sa durée ({d:g} s)")
-    return out
-
-
-def _total(durs: list[float], cuts: list[tuple[str | None, float]]) -> float:
-    """Durée de sortie : somme des scènes moins le recouvrement de chaque transition."""
-    return sum(durs) - sum(td for tr, td in cuts if tr)
-
-
-def _join_cuts(durs: list[float], cuts: list[tuple[str | None, float]], with_a: bool) -> list[str]:
-    """Comme _join, avec une transition (ou coupe franche) par coupe. Cas uniforme : délègue à _join."""
-    n = len(durs)
-    if all(c[0] is None for c in cuts):
-        return _join(durs, None, 0.0, with_a)
-    if len(set(cuts)) == 1:
-        return _join(durs, cuts[0][0], cuts[0][1], with_a)
-    parts = [f"[v{i}]settb=AVTB[s{i}]" for i in range(n)]
-    prev, acc = "s0", durs[0]
-    for i in range(1, n):
-        lab = "out" if i == n - 1 else f"x{i}"
-        tr, td = cuts[i - 1]
-        if tr is None:
-            parts.append(f"[{prev}][s{i}]concat=n=2:v=1:a=0[{lab}]")
-            acc += durs[i]
-        else:
-            off = acc - td
-            parts.append(f"[{prev}][s{i}]xfade=transition={tr}:duration={td:g}:offset={off:.3f}[{lab}]")
-            acc = off + durs[i]
-        prev = lab
-    if with_a:
-        prev = "a0"
-        for i in range(1, n):
-            lab = "ac" if i == n - 1 else f"ax{i}"
-            tr, td = cuts[i - 1]
-            if tr is None:
-                parts.append(f"[{prev}][a{i}]concat=n=2:v=0:a=1[{lab}]")
-            else:
-                parts.append(f"[{prev}][a{i}]acrossfade=d={td:g}[{lab}]")
-            prev = lab
-    return parts
+        lab = "".join(f"[v{i}][a{i}]" for i in range(n))
+        return [f"{lab}concat=n={n}:v=1:a=1[out][ac]"]
+    lab = "".join(f"[v{i}]" for i in range(n))
+    return [f"{lab}concat=n={n}:v=1:a=0[out]"]
 
 
 def _afilter(d: float, db: float = 0.0) -> str:
@@ -433,17 +324,16 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
     n = len(chosen)
     srcs = [paths[k] for k in order]
     durs = [(sc.end - sc.start) / sp for sc in chosen]
-    cuts = _cuts(look, durs)
-    total = _total(durs, cuts)
+    total = sum(durs)
     mix = with_a and use_m
     ech = _echo(look)
     fin = "aud0" if ech else "aud"
     if not with_a:
-        parts = [*nodes, *_join_cuts(durs, cuts, False)]
+        parts = [*nodes, *_join(n, False)]
     else:
         anodes = [_anode(i, order.index(sc.source_id), sc.start, sc.end, sp) for i, sc in enumerate(chosen)]
         gain = f"volume={db:g}dB" if db else "anull"
-        parts = [*nodes, *anodes, *_join_cuts(durs, cuts, True),
+        parts = [*nodes, *anodes, *_join(n, True),
                  f"[ac]{gain}[{'src' if mix else fin}]"]
     if use_m:
         parts.append(_mchain(len(srcs), total, mstart, mdb, mfade, "mus" if mix else fin))
@@ -468,7 +358,7 @@ def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     with_a, _ = _audio(look)
     use_m, _, mstart, _, _ = _music(look)
     durs = [(sc.end - sc.start) / _speed(look) for sc in eff.scenes if sc.selected]
-    total = _total(durs, _cuts(look, durs))
+    total = sum(durs)
     vsrcs = srcs[:-1] if use_m else srcs
     if use_m:
         _check_music(srcs[-1], mstart)
