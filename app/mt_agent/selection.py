@@ -2,9 +2,10 @@ from __future__ import annotations
 from .approval import PlanError
 from .models import Plan
 
-def parse_selection(spec: str, n: int) -> set[int]:
-    """'1-3,7' -> {1,2,3,7} (numéros à partir de 1). Toute erreur lève PlanError."""
-    out: set[int] = set()
+def parse_order(spec: str, n: int) -> list[int]:
+    """'3,1-2' -> [3,1,2] (ordre de saisie, sans doublon, numéros à partir de 1). Toute erreur lève PlanError."""
+    out: list[int] = []
+    seen: set[int] = set()
     for part in (p.strip() for p in spec.split(",")):
         lo_s, sep, hi_s = part.partition("-")
         try:
@@ -14,15 +15,28 @@ def parse_selection(spec: str, n: int) -> set[int]:
             raise PlanError(f"sélection invalide: {part!r}") from e
         if lo < 1 or hi > n or lo > hi:
             raise PlanError(f"hors limites 1..{n}: {part}")
-        out.update(range(lo, hi + 1))
+        for i in range(lo, hi + 1):
+            if i not in seen:
+                seen.add(i)
+                out.append(i)
     return out
 
+def parse_selection(spec: str, n: int) -> set[int]:
+    """'1-3,7' -> {1,2,3,7} (numéros à partir de 1). Toute erreur lève PlanError."""
+    return set(parse_order(spec, n))
+
 def select_scenes(plan: Plan, spec: str) -> Plan:
-    """Nouveau plan en attente : seules les scènes listées sont sélectionnées. L'approbation est annulée."""
+    """Nouveau plan en attente. Ordre croissant : positions conservées, seules les scènes listées sont sélectionnées.
+    Ordre non croissant : scènes listées d'abord (dans cet ordre), puis les autres non sélectionnées. Approbation annulée."""
     if plan.status == "rendered":
         raise PlanError("plan déjà rendu")
-    keep = parse_selection(spec, len(plan.scenes))
-    scenes = [s.model_copy(update={"selected": (i + 1) in keep}) for i, s in enumerate(plan.scenes)]
+    order = parse_order(spec, len(plan.scenes))
+    keep = set(order)
+    if order == sorted(order):
+        scenes = [s.model_copy(update={"selected": (i + 1) in keep}) for i, s in enumerate(plan.scenes)]
+    else:
+        scenes = ([plan.scenes[i - 1].model_copy(update={"selected": True}) for i in order]
+                  + [s.model_copy(update={"selected": False}) for i, s in enumerate(plan.scenes, 1) if i not in keep])
     return plan.model_copy(update={"scenes": scenes, "status": "pending_human_review", "approved_hash": None})
 
 def spec_from_flags(flags: list[bool]) -> str:

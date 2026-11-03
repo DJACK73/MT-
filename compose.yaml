@@ -16,6 +16,8 @@ services:
       dockerfile: Dockerfile.dashboard
     ports:
       - "127.0.0.1:8502:8501"
+    environment:
+      STREAMLIT_CLIENT_TOOLBAR_MODE: viewer
     volumes:
       - ./inbox:/app/inbox:ro
       - ./music:/app/music:ro

@@ -170,7 +170,9 @@ def on_select() -> None:
         plan = load(path)
         spec = st.session_state.get("spec", "").strip()
         if not spec:
-            spec = spec_from_flags(_flags(plan, path.name))
+            order = st.session_state.get(f"ord:{path.name}") or []
+            spec = (",".join(map(str, order)) if order != sorted(order)
+                    else spec_from_flags(_flags(plan, path.name)))
         if not spec:
             _flash("error", "Aucune scène cochée ni numéro saisi")
             return
@@ -351,6 +353,12 @@ def on_invert() -> None:
     for i, sc in enumerate(load(path).scenes, 1):
         k = f"sel:{path.name}:{i}"
         st.session_state[k] = not bool(st.session_state.get(k, sc.selected))
+
+
+def on_reverse() -> None:
+    path = Path(st.session_state["plan_path"])
+    k = f"ord:{path.name}"
+    st.session_state[k] = list(reversed(st.session_state.get(k, [])))
 
 
 def on_mir_all(value: bool) -> None:
@@ -714,8 +722,12 @@ def render_plan(plans: list[str]) -> None:
     pk = path.name
     saved = [s.selected for s in plan.scenes]
     flags = _flags(plan, pk)
+    saved_order = [i for i, on in enumerate(saved, 1) if on]
+    prev = [i for i in st.session_state.get(f"ord:{pk}", saved_order) if flags[i - 1]]
+    order = prev + [i for i, on in enumerate(flags, 1) if on and i not in prev]
+    st.session_state[f"ord:{pk}"] = order
     spec = str(st.session_state.get("spec", "")).strip()
-    dirty = bool(spec) or flags != saved
+    dirty = bool(spec) or flags != saved or order != saved_order
     pending = plan.status == "pending_human_review"
     approved = is_approved(plan)
     kept = sum(s.end - s.start for s in plan.scenes if s.selected)
@@ -741,8 +753,6 @@ def render_plan(plans: list[str]) -> None:
         st.warning("Plan modifié depuis l'approbation : approbation invalide.")
     elif not saved_any:
         st.info("Coche les scènes à garder (ou saisis des numéros), puis « Appliquer la sélection ».")
-    else:
-        st.info("Sélection enregistrée : clique « Approuver » pour débloquer l'export.")
     with st.container(border=True):
         st.markdown("**Sélection**")
         nm = sum(1 for i in range(1, len(plan.scenes) + 1) if st.session_state.get(f"mir:{pk}:{i}"))
@@ -751,6 +761,12 @@ def render_plan(plans: list[str]) -> None:
         t2.button("Tout décocher", key="b_cb_none", on_click=on_all, args=(False,))
         t3.button("Inverser", key="b_cb_inv", on_click=on_invert)
         t4.caption(f"Cochées : {sum(flags)}/{len(flags)}")
+        o1, o2 = st.columns([1, 3], vertical_alignment="center")
+        o1.button("Renverser l'ordre", key="b_ord_rev", on_click=on_reverse, disabled=len(order) < 2)
+        shown = " → ".join(map(str, order[:10])) + (f" … (+{len(order) - 10})" if len(order) > 10 else "")
+        o2.caption(f"Ordre du montage : {shown}" if order else "Ordre du montage : aucune scène cochée",
+                   help="L'ordre de cochage est l'ordre du montage. « Renverser l'ordre » l'inverse. "
+                        "Ou saisis des numéros (ex. 5,2,3) dans « Sélection par numéros ».")
         m1, m2, c5 = st.columns([1, 1, 2], vertical_alignment="center")
         m1.button("Miroir : toutes", key="b_mir_all", on_click=on_mir_all, args=(True,))
         m2.button("Miroir : aucune", key="b_mir_none", on_click=on_mir_all, args=(False,))
@@ -760,7 +776,7 @@ def render_plan(plans: list[str]) -> None:
                         "il inverse aussi les textes de la source. Aperçu des vignettes approximatif.")
         with st.expander("Sélection par numéros (avancé)"):
             st.text_input("Sélection (ex. 1-5,8)", key="spec")
-            st.caption("Si ce champ est rempli, il remplace les cases cochées.")
+            st.caption("Si ce champ est rempli, il remplace les cases cochées ; l'ordre saisi (ex. 5,2,3) est l'ordre du montage.")
     with st.container(border=True):
         st.markdown("**Actions**")
         a1, a2, _ = st.columns([1, 1, 2])
