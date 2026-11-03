@@ -818,8 +818,6 @@ def render_timeline(plans: list[str]) -> None:
     spec = str(st.session_state.get("spec", "")).strip()
     dirty = bool(spec) or _flags(plan, pk) != saved
     approved = is_approved(plan)
-    kept = sum(s.end - s.start for s in plan.scenes if s.selected)
-    st.caption(f"Plan : {plan_label(str(path), mark=False)} · {sum(saved)}/{len(saved)} scènes · {kept:.1f} s")
     if not approved:
         st.info("Approuve la sélection dans ③ pour activer les exports.")
     elif dirty:
@@ -849,8 +847,6 @@ def render_timeline(plans: list[str]) -> None:
         go_video = e1.button("Exporter la vidéo assemblée", key="b_exp_video", type="primary" if approved and not dirty else "secondary",
                              disabled=not approved or dirty)
         go_clips = e2.button("Exporter en clips séparés", key="b_exp_clips", disabled=not approved or dirty)
-        if approved and not dirty and not none:
-            st.caption(f"Rendu estimé : environ {max(1, round(kept / 0.33 / 60))} min au plus (mesuré avec le cadrage flou).")
     if go_video:
         _export_video(plan, look, crf)
     if go_clips:
