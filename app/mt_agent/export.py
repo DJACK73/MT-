@@ -145,16 +145,15 @@ def _snap(plan: Plan, look: Look | None, root: Path) -> Plan:
     if not r["beats"]:
         raise PlanError("calage : rythme non fiable pour ce morceau")
     sp = _speed(look)
-    durs = [(s.end - s.start) / sp for s in plan.scenes if s.selected]  # durées de sortie
+    chosen = plan.chosen()
+    durs = [(s.end - s.start) / sp for _, s in chosen]  # durées de sortie, dans l'ordre du montage
     beats = loop_beats(r["beats"], r["length"], mstart, sum(durs))
     it = iter(snap_durations(durs, beats, look.snap_lo))
-    out = []
-    for s in plan.scenes:
-        if s.selected:
-            e = next(it)
-            if e < (s.end - s.start) / sp - 1e-9:
-                s = s.model_copy(update={"end": min(s.end, round(s.start + e * sp, 3))})
-        out.append(s)
+    out = list(plan.scenes)
+    for n, s in chosen:
+        e = next(it)
+        if e < (s.end - s.start) / sp - 1e-9:
+            out[n - 1] = s.model_copy(update={"end": min(s.end, round(s.start + e * sp, 3))})
     return plan.model_copy(update={"scenes": out})
 
 
@@ -238,7 +237,7 @@ def _node(i: int, j: int, s: float, e: float, framing: str, w: int, h: int,
 
 def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
     """Retourne (chemins sources dans l'ordre des entrées, filter_complex). Vidéo seule."""
-    chosen = [s for s in plan.scenes if s.selected]
+    chosen = [s for _, s in plan.chosen()]
     if not chosen:
         raise PlanError("aucune scène sélectionnée")
     paths = {s.id: s.path for s in plan.sources}
@@ -255,7 +254,7 @@ def build_graph(plan: Plan, look: Look | None = None) -> tuple[list[str], str]:
                         "(tailles possiblement différentes) ; utiliser les clips séparés")
     _check_mirror(plan, look)
     sp = _speed(look)
-    nums = [n for n, s in enumerate(plan.scenes, 1) if s.selected]
+    nums = [n for n, _ in plan.chosen()]
     nodes = [_node(i, order.index(sc.source_id), sc.start, sc.end, fr, w, h, bg, cx,
                    _flip(look, nums[i]), sp)
              for i, sc in enumerate(chosen)]
@@ -297,7 +296,7 @@ def export_plan(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
         raise PlanError(f"sources absentes: {missing}")
     with_a, _ = _audio(look)
     use_m, _, mstart, _, _ = _music(look)
-    durs = [(sc.end - sc.start) / _speed(look) for sc in eff.scenes if sc.selected]
+    durs = [(sc.end - sc.start) / _speed(look) for _, sc in eff.chosen()]
     total = sum(durs)
     vsrcs = srcs[:-1] if use_m else srcs
     if use_m:
@@ -340,7 +339,7 @@ def export_clips(plan: Plan, root: Path, out_dir: Path, crf: int = 20,
     En cas d'échec au milieu, les clips déjà écrits restent."""
     assert_renderable(plan)
     ensure_outside_inbox(out_dir, root)
-    chosen = [(n, sc) for n, sc in enumerate(plan.scenes, 1) if sc.selected]
+    chosen = plan.chosen()
     if not chosen:
         raise PlanError("aucune scène sélectionnée")
     paths = {s.id: s.path for s in plan.sources}

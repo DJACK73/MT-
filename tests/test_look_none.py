@@ -6,10 +6,12 @@ from mt_agent.export import Look, _look, _node, build_graph
 
 
 def _plan(sources: list[str], framing: str = "blur_pad") -> NS:
+    scenes = [NS(selected=True, source_id=s, start=0.0, end=3.0, path=None) for s in sources]
     return NS(
         options=NS(framing=framing, profile="vertical"),
         sources=[NS(id=s, path=f"{s}.mp4") for s in sources],
-        scenes=[NS(selected=True, source_id=s, start=0.0, end=3.0, path=None) for s in sources],
+        scenes=scenes,
+        chosen=lambda: list(enumerate(scenes, 1)),
     )
 
 

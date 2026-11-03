@@ -26,18 +26,15 @@ def parse_selection(spec: str, n: int) -> set[int]:
     return set(parse_order(spec, n))
 
 def select_scenes(plan: Plan, spec: str) -> Plan:
-    """Nouveau plan en attente. Ordre croissant : positions conservées, seules les scènes listées sont sélectionnées.
-    Ordre non croissant : scènes listées d'abord (dans cet ordre), puis les autres non sélectionnées. Approbation annulée."""
+    """Nouveau plan en attente : seules les scènes listées sont sélectionnées, dans l'ordre saisi.
+    Ordre croissant -> `order` vide (ordre du plan). Les scènes ne bougent jamais. Approbation annulée."""
     if plan.status == "rendered":
         raise PlanError("plan déjà rendu")
     order = parse_order(spec, len(plan.scenes))
     keep = set(order)
-    if order == sorted(order):
-        scenes = [s.model_copy(update={"selected": (i + 1) in keep}) for i, s in enumerate(plan.scenes)]
-    else:
-        scenes = ([plan.scenes[i - 1].model_copy(update={"selected": True}) for i in order]
-                  + [s.model_copy(update={"selected": False}) for i, s in enumerate(plan.scenes, 1) if i not in keep])
-    return plan.model_copy(update={"scenes": scenes, "status": "pending_human_review", "approved_hash": None})
+    scenes = [s.model_copy(update={"selected": (i + 1) in keep}) for i, s in enumerate(plan.scenes)]
+    return plan.model_copy(update={"scenes": scenes, "order": [] if order == sorted(order) else order,
+                                   "status": "pending_human_review", "approved_hash": None})
 
 def spec_from_flags(flags: list[bool]) -> str:
     """[T,F,T,T,T] -> '1,3-5' (numéros à partir de 1). Aucune case cochée -> ''."""

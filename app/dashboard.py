@@ -199,6 +199,10 @@ def _pv_move(step: int, n: int) -> None:
     st.session_state["pv"] = min(max(int(st.session_state.get("pv", 1)) + step, 1), n)
 
 
+def _pv_set(dst: str, src: str) -> None:
+    st.session_state[dst] = bool(st.session_state[src])
+
+
 @st.dialog("Aperçu", width="small")
 def show_clip() -> None:
     path = Path(st.session_state["plan_path"])
@@ -214,10 +218,16 @@ def show_clip() -> None:
                 + (" · :blue[**⇋ miroir**]" if mir else "")
                 + (f" · :violet[**⏩ {spd:g}×**]" if spd != 1.0 else ""))
     st.caption(f"{sc.start:.2f} → {sc.end:.2f} s dans la source")
+    pkn = path.name
+    d1, d2 = st.columns(2)
+    d1.checkbox("garder", value=kept, key=f"pvk:{pkn}:{i}", on_change=_pv_set, args=(f"sel:{pkn}:{i}", f"pvk:{pkn}:{i}"))
+    d2.checkbox("miroir", value=mir, key=f"pvm:{pkn}:{i}", on_change=_pv_set, args=(f"mir:{pkn}:{i}", f"pvm:{pkn}:{i}"))
     try:
         with st.spinner("Préparation de l'aperçu…"):
             clip = preview_clip(srcs[sc.source_id], sc.start, sc.end, ROOT, mirror=mir, speed=spd)
-        st.video(str(clip))
+        with st.container(key="pvbox"):
+            st.markdown("<style>.st-key-pvbox video{max-height:60vh;width:auto;max-width:100%;display:block;margin:0 auto}</style>", unsafe_allow_html=True)
+            st.video(str(clip))
     except Exception as e:  # bord UI : afficher l'erreur sans planter la page
         st.error(f"Aperçu impossible : {e}")
     c1, c2 = st.columns(2)
@@ -722,7 +732,7 @@ def render_plan(plans: list[str]) -> None:
     pk = path.name
     saved = [s.selected for s in plan.scenes]
     flags = _flags(plan, pk)
-    saved_order = [i for i, on in enumerate(saved, 1) if on]
+    saved_order = [n for n, _ in plan.chosen()]
     prev = [i for i in st.session_state.get(f"ord:{pk}", saved_order) if flags[i - 1]]
     order = prev + [i for i, on in enumerate(flags, 1) if on and i not in prev]
     st.session_state[f"ord:{pk}"] = order
@@ -796,6 +806,7 @@ def render_plan(plans: list[str]) -> None:
     else:
         st.caption(f"Plan découpé en fenêtre {lo:g}–{mx:g} s : {bad} scène(s) hors fenêtre. ▼ trop courte, ▲ trop longue.")
     cols = st.columns(COLS)
+    pos = {n: p for p, n in enumerate(order, 1)}
     ids = [x.id for x in plan.sources]
     for i, (sc, th) in enumerate(zip(plan.scenes, thumbs), 1):
         with cols[(i - 1) % COLS], st.container(border=True, key=f"card_{i}"):
@@ -812,6 +823,7 @@ def render_plan(plans: list[str]) -> None:
                 st.session_state[km] = False
             flip = bool(st.session_state[km])
             st.caption(tag + f"**{i}** · {dur:.2f} s" + (f" :orange[**{flag}**]" if flag else "")
+                       + (f" · :green[**rang {pos[i]}**]" if i in pos else "")
                        + (" · :blue[**⇋ miroir**]" if flip else ""))
             g, m = st.columns([1, 1])
             with g, st.container(key=f"keep_{i}"):
