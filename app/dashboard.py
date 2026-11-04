@@ -43,6 +43,8 @@ CSS = (
     "[class*='st-key-b_cb_'] button[data-testid='stBaseButton-primary']{background:#0d9488!important;border-color:#0d9488;color:#fff!important}"
     "[class*='st-key-b_win_'] button{background:#0e1117!important;border:1px solid #0d948880;color:#0d9488!important;border-radius:12px;font-weight:600}"
     "[class*='st-key-b_win_'] button:hover{border-color:#0d9488}"
+    "[class*='st-key-pick'] [data-testid='stCheckbox']{zoom:1.4}"
+    "[class*='st-key-pick'] p{overflow-wrap:anywhere}"
     "[class*='st-key-b_win_'] button p{color:inherit}"
     "[class*='st-key-b_win_'] button[data-testid='stBaseButton-primary']{background:#0d9488!important;border-color:#0d9488;color:#fff!important}"
     "[class*='st-key-b_mir_'] button{background:#0e1117!important;border:1px solid #7c3aed80;color:#7c3aed!important;border-radius:12px;font-weight:600}"
