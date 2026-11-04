@@ -256,6 +256,15 @@ def cut_names() -> set[str]:
     return out
 
 
+def _existing_plan(name: str, opt: Options) -> str | None:
+    """Plan en attente le plus récent déjà coupé pour cette seule vidéo avec ces options, sinon None."""
+    for p in list_plans(PLANS):
+        if ".pending_human_review." in Path(p).name and _plan_sources(*_plan_key(p)) == (name,) \
+                and load(Path(p)).options == opt:
+            return p
+    return None
+
+
 def render_scan() -> None:
     videos = list_videos(ROOT / "inbox")
     if not videos:
@@ -292,8 +301,8 @@ def render_scan() -> None:
     if len(videos) > 1 and not manual:
         with st.expander("Vidéos à découper ensemble", expanded=True):
             for n in videos:
-                st.checkbox(("✓ " if n in done else "○ ") + n, value=True, key=f"pick:{n}")
-        picked = [n for n in videos if st.session_state.get(f"pick:{n}", True)]
+                st.checkbox(("✓ " if n in done else "○ ") + n, value=False, key=f"pick:{n}")
+        picked = [n for n in videos if st.session_state.get(f"pick:{n}", False)]
     b1, _ = st.columns([1.4, 5])
     whole = len(picked) == len(videos)
     batch_label = (f"Découper les {len(videos)} vidéos" if auto else f"Garder les {len(videos)} vidéos entières") if whole \
@@ -324,6 +333,12 @@ def render_scan() -> None:
         try:
             video = ROOT / "inbox" / name
             if opt is not None:
+                known = _existing_plan(name, opt)
+                if known is not None:
+                    existed += 1
+                    last = Path(known)
+                    cut.append(known)
+                    continue
                 plan = scan_video(video, ROOT, opt, True)
             else:
                 plan = manual_plan(video, ROOT, text if manual else None)

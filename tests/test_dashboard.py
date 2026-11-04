@@ -96,6 +96,8 @@ class Dashboard(unittest.TestCase):
         (self.r / "inbox" / "t.mp4").write_bytes((self.r / "inbox" / "s.mp4").read_bytes())
         at = AppTest.from_file(str(APP), default_timeout=180).run()
         self.assertEqual(len(at.exception), 0)
+        at.checkbox(key="pick:s.mp4").check().run()
+        at.checkbox(key="pick:t.mp4").check().run()
         _btn(at, "Découper les 2 vidéos").click().run()
         self.assertEqual(len(at.exception), 0)
         self.assertEqual(len(at.error), 0)
