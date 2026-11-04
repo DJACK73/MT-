@@ -473,8 +473,9 @@ def on_compose() -> None:
 
 def render_compose(plans: list[str]) -> None:
     if len(plans) < 2:
-        st.caption("Il faut au moins 2 plans (un par vidéo) pour composer un montage. "
-                   "Seuls les plans coupés en ① depuis le chargement de la page apparaissent ici.")
+        n = len(plans)
+        st.caption((f"{n} plan coupé en ①" if n else "Aucun plan coupé en ① depuis le chargement de la page")
+                   + " : il en faut au moins 2 (un par vidéo) pour composer un montage. Découpe les autres vidéos en ①.")
         return
     with st.container():
         names = lambda q: list(_plan_sources(*_plan_key(q)))
