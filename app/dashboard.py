@@ -140,7 +140,7 @@ def _flash(kind: str, msg: str) -> None:
 
 def _switch(new: Path) -> None:
     st.session_state["plan_path"] = str(new)
-    _flash("success", f"plan écrit : {new.name} → onglet ③ Montage")
+    _flash("success", f"plan écrit : {new.name} → onglet ③ Sélection")
 
 
 def _save_or_open(new: Plan, d: Path) -> None:
