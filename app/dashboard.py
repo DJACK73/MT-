@@ -758,7 +758,7 @@ def render_plan(plans: list[str]) -> None:
     dirty = bool(spec) or flags != saved or order != saved_order
     pending = plan.status == "pending_human_review"
     approved = is_approved(plan)
-    kept = sum(s.end - s.start for s in plan.scenes if s.selected)
+    kept = sum(s.end - s.start for s, on in zip(plan.scenes, flags) if on)
     c1, c2, c3 = st.columns(3)
     c1.metric("Statut", STATUS_FR[plan.status], border=True)
     c2.metric("Scènes", f"{sum(saved)}/{len(saved)}", border=True)
