@@ -39,6 +39,7 @@ CSS = (
     "[data-testid='stTabs'] [role='tab'][aria-selected='true']{color:#7d8cff!important;border-color:#7d8cff!important;outline-color:#7d8cff!important;font-weight:600}"
     "[data-testid='stTabs'] [role='tab'][aria-selected='true'] p{color:#7d8cff!important}"
     "[data-testid='stTabs'] [role='tab'][aria-selected='true']::after{background:#7d8cff!important;border-color:#7d8cff!important}"
+    "[data-testid='stTabs'] [role='tab'][aria-selected='true']>:last-child:not(:first-child){background-color:#7d8cff!important;border-color:#7d8cff!important}"
     "[data-testid='stMetricValue']{font-weight:800;letter-spacing:-.02em}"
     "[data-testid='stMetric']{border-radius:10px}"
     "h1{font-weight:800;letter-spacing:-.02em}"
