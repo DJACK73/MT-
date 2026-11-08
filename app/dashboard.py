@@ -40,6 +40,8 @@ CSS = (
     "[data-testid='stTabs'] [role='tab'][aria-selected='true'] p{color:#7d8cff!important}"
     "[data-testid='stTabs'] [role='tab'][aria-selected='true']::after{background:#7d8cff!important;border-color:#7d8cff!important}"
     "[data-testid='stTabs'] [role='tab'][aria-selected='true']>:last-child:not(:first-child){background-color:#7d8cff!important;border-color:#7d8cff!important}"
+    "[data-testid='stTab']:focus,[data-testid='stTab']:focus-visible{outline:none!important;box-shadow:inset 0 0 0 1px rgba(125,140,255,.6)!important}"
+    "[data-testid='stRadioOption'][data-selected='true']>div>div:first-child{background-color:#7d8cff!important;border-color:#7d8cff!important}"
     "[data-testid='stMetricValue']{font-weight:800;letter-spacing:-.02em}"
     "[data-testid='stMetric']{border-radius:10px}"
     "h1{font-weight:800;letter-spacing:-.02em}"
