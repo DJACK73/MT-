@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+docker compose --profile web stop web >/dev/null 2>&1 || true
 docker compose --profile dashboard up -d dashboard
 for i in $(seq 1 30); do
   curl -sf -o /dev/null http://127.0.0.1:8502/_stcore/health && exit 0

@@ -1,9 +1,11 @@
 from __future__ import annotations
 from pathlib import Path
 from .approval import PlanError, approve, is_approved, plan_id, save_plan
+from .avtools import extract_audio, remove_audio
 from .compose import letter
 from .fit import window_flag
 from .models import Plan
+from .paths import ensure_outside_inbox
 from .selection import select_scenes
 from .thumbs import make_thumbnails
 
@@ -84,3 +86,27 @@ def thumbnail(root: Path, name: str, n: int) -> Path | None:
     if not 1 <= n <= len(plan.scenes):
         raise PlanError(f"scène hors limites: {n}")
     return make_thumbnails(plan, root)[n - 1]
+
+
+_VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"}  # = dashboard.VIDEO_EXT
+_TOOLS = {"audio": (extract_audio, ".m4a"), "muet": (remove_audio, "-muet.mp4")}
+
+
+def list_inbox(root: Path) -> list[str]:
+    d = root / "inbox"
+    if not d.is_dir():
+        return []
+    return sorted(x.name for x in d.iterdir() if x.is_file() and x.suffix.lower() in _VIDEO_EXT)
+
+
+def run_tool(root: Path, name: str, tool: str) -> dict:
+    if tool not in _TOOLS:
+        raise ValueError(f"outil inconnu: {tool}")
+    src = root / "inbox" / name
+    if Path(name).name != name or src.suffix.lower() not in _VIDEO_EXT or not src.is_file():
+        raise ValueError(f"vidéo invalide: {name}")
+    fn, tail = _TOOLS[tool]
+    out = ensure_outside_inbox(root / "output" / (src.stem + tail), root)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fn(src, out)
+    return {"out": out.name, "tool": tool}

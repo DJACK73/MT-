@@ -23,3 +23,17 @@ services:
       - ./music:/app/music:ro
       - ./workspace:/app/workspace
       - ./output:/app/output
+
+  web:
+    profiles: ["web"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    entrypoint: ["python", "-m", "uvicorn", "web:app", "--host", "0.0.0.0", "--port", "8501", "--app-dir", "/app/app"]
+    ports:
+      - "127.0.0.1:8502:8501"
+    volumes:
+      - ./inbox:/app/inbox:ro
+      - ./music:/app/music:ro
+      - ./workspace:/app/workspace
+      - ./output:/app/output

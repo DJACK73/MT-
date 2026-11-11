@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MT — Montage</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e8ebee;--panel:#f6f7f8;--ink:#161b24;--mute:#5d6674;--line:#c9cfd6;--sel:#2b3fd6;--on:#fff;--warn:#d98a00;--bad:#c0322b;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12151b;--panel:#1b2028;--ink:#e8ebf0;--mute:#9aa3b2;--line:#303744;--sel:#7d8cff;--on:#10131c;--warn:#f0b23a;--bad:#ff8a80}}
+:root[data-theme="dark"]{--bg:#12151b;--panel:#1b2028;--ink:#e8ebf0;--mute:#9aa3b2;--line:#303744;--sel:#7d8cff;--on:#10131c;--warn:#f0b23a;--bad:#ff8a80}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 "Bricolage Grotesque",system-ui,sans-serif}
+.wrap{max-width:1040px;margin:0 auto;padding:20px 20px 48px}
+nav{display:flex;gap:22px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:26px}
+nav a{padding:10px 0;color:var(--mute);white-space:nowrap;text-decoration:none;border-bottom:3px solid transparent}
+nav a.cur{color:var(--ink);font-weight:600;border-color:var(--sel)}
+section{display:none}section.cur{display:block}
+h1{font-size:clamp(28px,5vw,44px);line-height:1.05;font-weight:800;margin:0 0 4px;letter-spacing:-.02em}
+h2{font-size:18px;margin:0 0 10px}
+.sub{color:var(--mute);margin:0 0 22px}
+.demo{border:1px dashed var(--line);border-radius:8px;padding:6px 12px;color:var(--mute);font-size:13px;margin:0 0 18px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.btn{font:inherit;cursor:pointer;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:8px 16px}
+.btn:hover{border-color:var(--ink)}.btn.main{background:var(--sel);color:var(--on);border-color:var(--sel);font-weight:600}
+.btn.bad{color:var(--bad);border-color:var(--bad)}.btn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,.card:focus-visible,.seg:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+select,input[type=number]{font:inherit;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+label{display:flex;flex-direction:column;gap:4px;color:var(--mute);font-size:14px}
+.vid{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.vid:first-child{border-top:0}.vid input{width:20px;height:20px;accent-color:var(--sel)}
+.vid .nm{flex:1;overflow-wrap:anywhere}.tag{font-size:13px;border-radius:4px;padding:1px 8px;background:var(--line);color:var(--ink)}
+.tag.ok{background:var(--sel);color:var(--on)}
+.total{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:12px}.total b{font-size:34px;font-weight:800;font-variant-numeric:tabular-nums}
+.strip{display:flex;gap:2px;height:64px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px;overflow:hidden}
+.seg{all:unset;box-sizing:border-box;cursor:pointer;min-width:6px;border-radius:2px;background:var(--line);display:flex;align-items:flex-end;padding:3px 4px;font-size:11px;color:var(--mute)}
+.seg.on{background:var(--sel);color:var(--on);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+.card{all:unset;box-sizing:border-box;cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:block}
+.card.on{border-color:var(--sel);box-shadow:0 0 0 2px var(--sel)}
+.thumb{height:92px;position:relative;background:#0b0d12;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.rank{position:absolute;top:8px;left:8px;min-width:28px;height:28px;border-radius:14px;background:var(--sel);color:var(--on);font-weight:800;display:none;place-items:center;padding:0 8px}
+.card.on .rank{display:grid}
+.badge{position:absolute;right:8px;top:8px;background:var(--warn);color:#161b24;font-size:12px;font-weight:600;border-radius:4px;padding:1px 6px}
+.meta{padding:9px 12px;display:flex;justify-content:space-between;font-variant-numeric:tabular-nums}.meta span:last-child{color:var(--mute)}
+details{border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin-bottom:10px}summary{cursor:pointer;font-weight:600}
+details .row{margin-top:12px}
+.lvl{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--line)}
+.lvl:first-of-type{border-top:0}.lvl p{margin:0;color:var(--mute);max-width:52ch}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:22px;max-width:380px}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.msg{margin-top:14px;color:var(--mute);min-height:1.5em}
+@media (prefers-reduced-motion:no-preference){.seg,.card{transition:background .15s,box-shadow .15s}}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;position:relative}
+.top b{font-size:18px;font-weight:800}
+.guide{border:0;padding:0;margin:0}
+.guide summary{list-style:none;cursor:pointer;border:1px solid var(--sel);color:var(--sel);border-radius:12px;padding:6px 14px;font-weight:600}
+.guide summary::-webkit-details-marker{display:none}
+.gbody{position:absolute;right:0;top:46px;z-index:5;width:min(560px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.gbody p{margin:0 0 8px;color:var(--mute);font-size:14px}.gbody p:last-child{margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top"><b>🎬 MT · Montage</b><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), nettoyage (⑤).</p><p>③ : Sélection (cases) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.</p></div></details></header>
+<nav id="nav" aria-label="Étapes"></nav>
+
+<section id="decouper"><h1>Découpe tes vidéos</h1><p class="sub">Rien n’est coché au départ. Une vidéo déjà coupée avec les mêmes options se rouvre sans redécoupe.</p>
+<p class="demo">Écran de démonstration : pas encore branché à MT.</p>
+<div class="box" id="vids"></div>
+<div class="box"><h2>Options</h2><div class="row">
+<label>Sensibilité<input type="number" value="0.35" step="0.05" style="width:90px"></label>
+<label>Min (s)<input type="number" value="3" style="width:80px"></label>
+<label>Max (s)<input type="number" value="5" style="width:80px"></label>
+<label>Cadrage<select><option>9:16</option><option>16:9</option><option>1:1</option></select></label></div></div>
+<button class="btn main" id="cut">Découper la sélection</button><p class="msg" id="cutmsg"></p></section>
+
+<section id="outils"><h1>Outils son</h1><p class="sub">Vidéos de inbox/. Les fichiers créés vont dans output/, sans jamais écraser.</p>
+<div class="box" id="tl"></div><p class="msg" id="tmsg"></p></section>
+
+<section id="composer"><h1>Compose (facultatif)</h1><p class="sub">Seules les vidéos coupées à l’étape précédente apparaissent ici.</p>
+<p class="demo">Écran de démonstration : pas encore branché à MT.</p>
+<div class="box" id="comp"></div><button class="btn main" id="goSel">Passer à la sélection</button></section>
+
+<section id="selection"><h1>Choisis tes scènes</h1><p class="sub" id="selsub">Chargement…</p>
+<div class="row" style="margin-bottom:16px"><label>Plan<select id="plansel" style="max-width:100%"></select></label></div>
+<div class="total"><b id="tot">0 s</b><span id="cnt" class="sub" style="margin:0"></span><span class="tag" id="st"></span></div>
+<div class="strip" id="strip" role="group" aria-label="Frise des scènes"></div>
+<div class="row" style="margin:18px 0 8px"><button class="btn main" id="all">Tout cocher</button><button class="btn" id="none">Tout décocher</button><button class="btn" id="rev">Renverser l’ordre</button></div>
+<div class="row" style="margin:0 0 22px"><button class="btn main" id="apply" disabled>Appliquer la sélection</button><button class="btn" id="appr" disabled>Approuver</button></div>
+<p class="msg" id="selmsg"></p>
+<div class="grid" id="grid"></div></section>
+
+<section id="export"><h1>Exporte ton montage</h1><p class="sub" id="recap"></p>
+<p class="demo">Écran de démonstration : pas encore branché à MT.</p>
+<div class="box"><h2>Réglages</h2>
+<details open><summary>Cadrage et format</summary><div class="row" id="fmt"></div></details>
+<details><summary>Son</summary><div class="row"><label>Source du son<select><option>Sans audio</option><option>Audio de la vidéo</option><option>Musique</option></select></label><label>Écho<select><option>Aucun</option><option>Léger</option></select></label></div></details></div>
+<div class="box"><h2>Export</h2><div class="row"><label>Vitesse<select><option>1×</option><option>0,5×</option><option>1,5×</option><option>2×</option></select></label><label>Qualité<select><option>Normal</option><option>Haute</option></select></label></div>
+<div class="row" style="margin-top:16px"><button class="btn main" id="ex1">Exporter la vidéo assemblée</button><button class="btn" id="ex2">Exporter en clips séparés</button></div><p class="msg" id="exmsg"></p></div></section>
+
+<section id="nettoyage"><h1>Fais de la place</h1><p class="sub">Chaque niveau supprime des fichiers de travail. Tes vidéos sources ne sont pas touchées.</p>
+<p class="demo">Écran de démonstration : pas encore branché à MT.</p>
+<div class="box" id="lvls"></div></section>
+</div>
+
+<dialog id="dlg"><h2>Confirmer le nettoyage</h2><p id="dtxt"></p><div class="row"><button class="btn bad" id="dok">Confirmer</button><button class="btn" id="dno">Annuler</button></div></dialog>
+
+<script>
+const $=i=>document.getElementById(i),fmt=x=>x.toFixed(1).replace('.',','),enc=encodeURIComponent;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TABS=[['decouper','① Découper'],['outils','Outils'],['composer','② Composer'],['selection','③ Sélection'],['export','④ Export'],['nettoyage','⑤ Nettoyage']];
+const V=[{n:'Black Clover S06E175.mkv',cut:true},{n:'a1c8aca2a1cab83a5d604f0e1e1dbd82_1.mp4',cut:false},{n:'cristiano_ronaldo_king_of_dribbling_4k.mp4',cut:false},{n:'ib1.mp4',cut:false},{n:'ib2.mp4',cut:false}];
+const picked=new Set();
+let P=null,cur='',order=[],saved=[],fm='9:16';
+const api=async(u,o)=>{const r=await fetch(u,o);let j=null;try{j=await r.json()}catch(e){}
+ if(!r.ok)throw new Error((j&&j.error)||('HTTP '+r.status));return j};
+const msg=t=>{$('selmsg').textContent=t||''};
+const dur=s=>Number(s.duration)||0;
+const same=(a,b)=>a.length==b.length&&a.every((x,i)=>x==b[i]);
+function route(){const h=(location.hash||'#decouper').slice(1);const id=TABS.some(t=>t[0]==h)?h:'decouper';
+ document.querySelectorAll('section').forEach(s=>s.classList.toggle('cur',s.id==id));
+ $('nav').innerHTML=TABS.map(t=>`<a href="#${t[0]}" class="${t[0]==id?'cur':''}">${t[1]}</a>`).join('');}
+function drawV(){
+ $('vids').innerHTML=V.map((v,i)=>`<label class="vid" style="flex-direction:row;align-items:center;color:var(--ink);font-size:15px"><input type="checkbox" data-i="${i}" ${picked.has(i)?'checked':''}><span class="nm">${v.n}</span><span class="tag ${v.cut?'ok':''}">${v.cut?'✓ coupée':'○ jamais coupée'}</span></label>`).join('');
+ $('vids').querySelectorAll('input').forEach(c=>c.onchange=()=>{c.checked?picked.add(+c.dataset.i):picked.delete(+c.dataset.i)});
+ const done=V.filter(v=>v.cut);
+ $('comp').innerHTML=done.length?done.map((v,i)=>`<div class="vid"><span class="tag ok">${'ABCDE'[i]}</span><span class="nm">${v.n}</span></div>`).join(''):'<p class="sub" style="margin:0">Aucune vidéo coupée. Coupe-en une à l’étape ①.</p>';
+}
+function loadThumbs(){
+ const q=[...document.querySelectorAll('img[data-src]')];
+ const next=()=>{const im=q.shift();if(!im)return;im.onload=next;im.onerror=()=>{im.remove();next()};im.src=im.dataset.src};
+ next();
+}
+function drawS(){
+ const S=P?P.scenes:[],by=new Map(S.map(s=>[s.n,s]));
+ const tot=order.reduce((a,n)=>a+(by.has(n)?dur(by.get(n)):0),0);
+ const dirty=!same(order,saved);
+ $('tot').textContent=fmt(tot)+' s';
+ $('cnt').textContent=order.length?order.length+' scène'+(order.length>1?'s':'')+' dans le montage':'Aucune scène cochée';
+ $('st').textContent=P?(dirty?'non enregistré':P.status):'';
+ $('apply').disabled=!P||!dirty||!order.length;
+ $('appr').disabled=!P||dirty||!order.length||!!P.approved;
+ $('recap').textContent=order.length?`${order.length} scène(s) · ${fmt(tot)} s · format ${fm}`:'Aucune scène choisie : retourne à l’étape ③.';
+ $('strip').innerHTML='';$('grid').innerHTML='';
+ S.forEach(s=>{const r=order.indexOf(s.n)+1,on=r>0,fl=s.flag?(s.flag===true?'noire':String(s.flag)):'';
+  const b=document.createElement('button');b.className='seg'+(on?' on':'');b.style.flex=Math.max(dur(s),.2)+' 1 0';b.textContent=on?r:'';b.title='Scène '+s.n;b.setAttribute('aria-pressed',on);b.onclick=()=>tg(s.n);$('strip').append(b);
+  const c=document.createElement('button');c.className='card'+(on?' on':'');c.setAttribute('aria-pressed',on);
+  c.innerHTML=`<div class="thumb"><img data-src="/api/plan/${enc(cur)}/thumb/${s.n}" alt=""><span class="rank">${r||''}</span>${fl?`<span class="badge">${esc(fl)}</span>`:''}</div><div class="meta"><span>Scène ${s.n}</span><span>${fmt(dur(s))} s</span></div>`;
+  c.onclick=()=>tg(s.n);$('grid').append(c);});
+}
+function tg(n){const i=order.indexOf(n);i<0?order.push(n):order.splice(i,1);redraw()}
+function redraw(){const y=scrollY;drawS();loadThumbs();scrollTo(0,y)}
+async function loadPlan(name){
+ P=await api('/api/plan/'+enc(name));cur=name;
+ order=Array.isArray(P.order)&&P.order.length?P.order.slice():P.scenes.filter(s=>s.selected).sort((a,b)=>(a.rank||0)-(b.rank||0)).map(s=>s.n);
+ saved=order.slice();
+ const src=(plans.find(p=>p.name==name)||{}).sources||[];
+ $('selsub').textContent=`${src.join(', ')} — ${P.scenes.length} scènes. L’ordre du montage suit l’ordre de tes clics.`;
+ msg('');redraw();
+}
+let plans=[];
+async function loadPlans(keep){
+ plans=await api('/api/plans');const sel=$('plansel');
+ sel.innerHTML=plans.map(p=>`<option value="${esc(p.name)}">${esc((p.sources||[]).join(', '))} · ${esc(p.status)} · ${p.selected}/${p.total} · ${esc(p.name.slice(0,8))}</option>`).join('');
+ const want=keep&&plans.some(p=>p.name==keep)?keep:(plans.find(p=>p.status=='approved')||plans[0]||{}).name;
+ if(!want){P=null;order=[];saved=[];$('selsub').textContent='Aucun plan. Coupe une vidéo à l’étape ①.';redraw();return}
+ sel.value=want;await loadPlan(want);
+}
+$('plansel').onchange=e=>loadPlan(e.target.value).catch(x=>msg(x.message));
+$('all').onclick=()=>{if(P){order=P.scenes.map(s=>s.n);redraw()}};
+$('none').onclick=()=>{order=[];redraw()};
+$('rev').onclick=()=>{order.reverse();redraw()};
+$('apply').onclick=async()=>{
+ try{const r=await api('/api/plan/'+enc(cur)+'/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({order})});
+  await loadPlans(r.name);msg(r.changed?'Sélection enregistrée (nouveau plan).':'Aucun changement.')}catch(e){msg(e.message)}};
+$('appr').onclick=async()=>{
+ try{const r=await api('/api/plan/'+enc(cur)+'/approve',{method:'POST'});
+  await loadPlans((r&&r.name)||cur);msg('Plan approuvé.')}catch(e){msg(e.message)}};
+$('cut').onclick=()=>{const k=[...picked];if(!k.length){$('cutmsg').textContent='Coche au moins une vidéo.';return}
+ k.forEach(i=>V[i].cut=true);picked.clear();$('cutmsg').textContent=k.length+' vidéo(s) coupée(s) (démonstration).';drawV()};
+$('goSel').onclick=()=>location.hash='#selection';
+$('fmt').innerHTML=['9:16','16:9','1:1'].map(f=>`<button class="btn ${f==fm?'on':''}" data-f="${f}">${f}</button>`).join('');
+$('fmt').onclick=e=>{const f=e.target.dataset.f;if(!f)return;fm=f;$('fmt').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.f==f));drawS()};
+$('ex1').onclick=()=>$('exmsg').textContent='Démonstration : aucun export lancé.';$('ex2').onclick=$('ex1').onclick;
+const L=[['Niveau 1','Supprime les plans, vignettes et aperçus. Coupe d’abord tes vidéos si tu as besoin des plans.','6 élément(s), 1,2 Mo'],['Niveau 2','Ajoute les sorties exportées.','9 élément(s), 148 Mo'],['Niveau 3','Ajoute les rendus intermédiaires et le cache.','14 élément(s), 730 Mo']];
+$('lvls').innerHTML=L.map((l,i)=>`<div class="lvl"><div><b>${l[0]}</b><p>${l[1]}</p></div><button class="btn bad" data-i="${i}">Nettoyer</button></div>`).join('');
+$('lvls').onclick=e=>{const i=e.target.dataset.i;if(i==null)return;$('dtxt').textContent=L[i][2]+'. Irréversible (démonstration : rien n’est supprimé).';$('dlg').showModal()};
+$('dno').onclick=$('dok').onclick=()=>$('dlg').close();
+async function loadInbox(){try{const v=await api('/api/inbox');
+ $('tl').innerHTML=v.length?v.map((n,i)=>`<div class="vid"><span class="nm">${esc(n)}</span><button class="btn" data-t="audio" data-i="${i}">Extraire le son</button><button class="btn" data-t="muet" data-i="${i}">Retirer le son</button></div>`).join(''):'<p class="sub" style="margin:0">Aucune vidéo dans inbox/.</p>';
+ $('tl').onclick=async e=>{const b=e.target.closest('button[data-t]');if(!b)return;
+  const bs=$('tl').querySelectorAll('button');bs.forEach(x=>x.disabled=true);$('tmsg').textContent='En cours…';
+  try{const r=await api('/api/tool',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:v[+b.dataset.i],tool:b.dataset.t})});$('tmsg').textContent='Créé : output/'+r.out}
+  catch(x){$('tmsg').textContent=x.message}finally{bs.forEach(x=>x.disabled=false)}}}
+ catch(e){$('tl').innerHTML='<p class="sub" style="margin:0">Erreur : '+esc(e.message)+'</p>'}}
+loadInbox();
+addEventListener('hashchange',route);route();drawV();
+loadPlans().catch(e=>{$('selsub').textContent='Erreur : '+e.message});
+</script>
+</body>
+</html>
