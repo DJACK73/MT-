@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mt_agent.avtools import extract_audio, remove_audio
+from mt_agent.avtools import extract_audio, remove_audio, stack_videos
 from mt_agent.ffx import MediaError
 
 HAVE = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
@@ -44,4 +44,34 @@ class AvTools(unittest.TestCase):
         out.write_bytes(b"x")
         with self.assertRaises(MediaError):
             extract_audio(self.src, out)
+        self.assertEqual(out.read_bytes(), b"x")
+
+    def _dims(self, p: Path) -> tuple[int, int]:
+        r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                            "-of", "csv=p=0", str(p)], capture_output=True, text=True, check=True)
+        w, h = r.stdout.strip().split(",")[:2]
+        return int(w), int(h)
+
+    def test_stack_cote(self) -> None:
+        out = self.dir / "c.mp4"
+        stack_videos(self.src, self.src, out, "cote")
+        self.assertEqual(self._dims(out), (1440, 720))
+        self.assertEqual(_kinds(out), ["video"])
+
+    def test_stack_dessus(self) -> None:
+        out = self.dir / "d.mp4"
+        stack_videos(self.src, self.src, out, "dessus")
+        self.assertEqual(self._dims(out), (720, 1440))
+
+    def test_stack_bad_mode(self) -> None:
+        out = self.dir / "z.mp4"
+        with self.assertRaises(ValueError):
+            stack_videos(self.src, self.src, out, "zzz")
+        self.assertFalse(out.exists())
+
+    def test_stack_refuses_overwrite(self) -> None:
+        out = self.dir / "e.mp4"
+        out.write_bytes(b"x")
+        with self.assertRaises(MediaError):
+            stack_videos(self.src, self.src, out, "cote")
         self.assertEqual(out.read_bytes(), b"x")

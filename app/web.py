@@ -97,6 +97,16 @@ async def tool(request: Request) -> Response:
     return await _call(webapi.run_tool, ROOT, body["name"], body["tool"])
 
 
+async def stack(request: Request) -> Response:
+    try:
+        body = await request.json()
+    except ValueError:
+        return _err(400, "JSON invalide")
+    if not isinstance(body, dict) or any(not isinstance(body.get(k), str) for k in ("a", "b", "mode")):
+        return _err(400, "a, b et mode attendus")
+    return await _call(webapi.run_stack, ROOT, body["a"], body["b"], body["mode"])
+
+
 app = Starlette(routes=[
     Route("/", index),
     Route("/api/plans", plans),
@@ -106,4 +116,5 @@ app = Starlette(routes=[
     Route("/api/plan/{name}/thumb/{n:int}", thumb),
     Route("/api/inbox", inbox),
     Route("/api/tool", tool, methods=["POST"]),
+    Route("/api/stack", stack, methods=["POST"]),
 ])

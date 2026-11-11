@@ -1,7 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 from .approval import PlanError, approve, is_approved, plan_id, save_plan
-from .avtools import extract_audio, remove_audio
+from .avtools import extract_audio, remove_audio, stack_videos
 from .compose import letter
 from .fit import window_flag
 from .models import Plan
@@ -110,3 +110,18 @@ def run_tool(root: Path, name: str, tool: str) -> dict:
     out.parent.mkdir(parents=True, exist_ok=True)
     fn(src, out)
     return {"out": out.name, "tool": tool}
+
+
+def run_stack(root: Path, a: str, b: str, mode: str) -> dict:
+    if mode not in ("cote", "dessus"):
+        raise ValueError(f"disposition inconnue: {mode}")
+    srcs = []
+    for n in (a, b):
+        s = root / "inbox" / n
+        if Path(n).name != n or s.suffix.lower() not in _VIDEO_EXT or not s.is_file():
+            raise ValueError(f"vidéo invalide: {n}")
+        srcs.append(s)
+    out = ensure_outside_inbox(root / "output" / f"{srcs[0].stem}__{srcs[1].stem}-{mode}.mp4", root)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    stack_videos(srcs[0], srcs[1], out, mode)
+    return {"out": out.name, "tool": "stack"}

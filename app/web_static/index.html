@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MT — Montage</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🎬%3C/text%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#e8ebee;--panel:#f6f7f8;--ink:#161b24;--mute:#5d6674;--line:#c9cfd6;--sel:#2b3fd6;--on:#fff;--warn:#d98a00;--bad:#c0322b;
@@ -80,7 +81,9 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <button class="btn main" id="cut">Découper la sélection</button><p class="msg" id="cutmsg"></p></section>
 
 <section id="outils"><h1>Outils son</h1><p class="sub">Vidéos de inbox/. Les fichiers créés vont dans output/, sans jamais écraser.</p>
-<div class="box" id="tl"></div><p class="msg" id="tmsg"></p></section>
+<div class="box" id="tl"></div>
+<div class="box"><h2>Coller deux vidéos</h2><div class="row"><label>Vidéo A<select id="sa"></select></label><label>Vidéo B<select id="sb"></select></label><label>Disposition<select id="sm"><option value="cote">Côte à côte</option><option value="dessus">L’une au-dessus de l’autre</option></select></label></div><div class="row" style="margin-top:14px"><button class="btn main" id="stk">Coller</button></div></div>
+<p class="msg" id="tmsg"></p></section>
 
 <section id="composer"><h1>Compose (facultatif)</h1><p class="sub">Seules les vidéos coupées à l’étape précédente apparaissent ici.</p>
 <p class="demo">Écran de démonstration : pas encore branché à MT.</p>
@@ -193,6 +196,12 @@ $('lvls').onclick=e=>{const i=e.target.dataset.i;if(i==null)return;$('dtxt').tex
 $('dno').onclick=$('dok').onclick=()=>$('dlg').close();
 async function loadInbox(){try{const v=await api('/api/inbox');
  $('tl').innerHTML=v.length?v.map((n,i)=>`<div class="vid"><span class="nm">${esc(n)}</span><button class="btn" data-t="audio" data-i="${i}">Extraire le son</button><button class="btn" data-t="muet" data-i="${i}">Retirer le son</button></div>`).join(''):'<p class="sub" style="margin:0">Aucune vidéo dans inbox/.</p>';
+
+ const opts=v.map((n,i)=>`<option value="${i}">${esc(n)}</option>`).join('');$('sa').innerHTML=opts;$('sb').innerHTML=opts;if(v.length>1)$('sb').value='1';
+ $('stk').onclick=async()=>{if(v.length<2){$('tmsg').textContent='Il faut au moins deux vidéos dans inbox/.';return}
+  const k=$('stk');k.disabled=true;$('tmsg').textContent='Collage en cours… (plusieurs minutes pour une longue vidéo)';
+  try{const r=await api('/api/stack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({a:v[+$('sa').value],b:v[+$('sb').value],mode:$('sm').value})});$('tmsg').textContent='Créé : output/'+r.out}
+  catch(x){$('tmsg').textContent=x.message}finally{k.disabled=false}};
  $('tl').onclick=async e=>{const b=e.target.closest('button[data-t]');if(!b)return;
   const bs=$('tl').querySelectorAll('button');bs.forEach(x=>x.disabled=true);$('tmsg').textContent='En cours…';
   try{const r=await api('/api/tool',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:v[+b.dataset.i],tool:b.dataset.t})});$('tmsg').textContent='Créé : output/'+r.out}
