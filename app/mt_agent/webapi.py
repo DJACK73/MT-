@@ -114,16 +114,24 @@ def run_tool(root: Path, name: str, tool: str) -> dict:
     return {"out": f"{tool}/{out.name}", "tool": tool}
 
 
-def run_stack(root: Path, a: str, b: str, mode: str) -> dict:
+def run_stack(root: Path, names: list[str], mode: str, fit: str = "ajuster") -> dict:
+    if not isinstance(names, list):
+        raise ValueError("videos: liste attendue")
+    if fit not in avtools.STACK_FITS:
+        raise ValueError(f"cadrage inconnu: {fit}")
     if mode not in avtools.STACK_MODES:
         raise ValueError(f"disposition inconnue: {mode}")
     srcs = []
-    for n in (a, b):
+    for n in names:
+        if not isinstance(n, str):
+            raise ValueError(f"vidéo invalide: {n}")
         s = root / "inbox" / n
         if Path(n).name != n or s.suffix.lower() not in _VIDEO_EXT or not s.is_file():
             raise ValueError(f"vidéo invalide: {n}")
         srcs.append(s)
-    out = ensure_outside_inbox(root / "output" / "collage" / f"{srcs[0].stem}__{srcs[1].stem}-{mode}.mp4", root)
+    tag = "-remplir" if fit == "remplir" and mode in avtools.FIT_MODES else ""
+    base = "__".join(s.stem[:40] for s in srcs)
+    out = ensure_outside_inbox(root / "output" / "collage" / f"{base}-{mode}{tag}.mp4", root)
     out.parent.mkdir(parents=True, exist_ok=True)
-    stack_videos(srcs[0], srcs[1], out, mode)
+    stack_videos(srcs, out, mode, fit)
     return {"out": f"collage/{out.name}", "tool": "stack"}

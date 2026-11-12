@@ -54,24 +54,24 @@ class AvTools(unittest.TestCase):
 
     def test_stack_cote(self) -> None:
         out = self.dir / "c.mp4"
-        stack_videos(self.src, self.src, out, "cote")
+        stack_videos([self.src, self.src], out, "cote")
         self.assertEqual(self._dims(out), (1440, 720))
         self.assertEqual(_kinds(out), ["video"])
 
     def test_stack_dessus(self) -> None:
         out = self.dir / "d.mp4"
-        stack_videos(self.src, self.src, out, "dessus")
+        stack_videos([self.src, self.src], out, "dessus")
         self.assertEqual(self._dims(out), (720, 1440))
 
     def test_stack_bad_mode(self) -> None:
         out = self.dir / "z.mp4"
         with self.assertRaises(ValueError):
-            stack_videos(self.src, self.src, out, "zzz")
+            stack_videos([self.src, self.src], out, "zzz")
         self.assertFalse(out.exists())
 
     def test_stack_refuses_overwrite(self) -> None:
         out = self.dir / "e.mp4"
         out.write_bytes(b"x")
         with self.assertRaises(MediaError):
-            stack_videos(self.src, self.src, out, "cote")
+            stack_videos([self.src, self.src], out, "cote")
         self.assertEqual(out.read_bytes(), b"x")

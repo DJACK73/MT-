@@ -56,10 +56,10 @@ class WebTools(unittest.TestCase):
         for a, b, m in (("../a.mp4", "a.mp4", "cote"), ("a.mp4", "notes.txt", "cote"),
                         ("a.mp4", "absent.mp4", "dessus"), ("a.mp4", "a.mp4", "zzz")):
             with self.assertRaises(ValueError):
-                webapi.run_stack(self.root, a, b, m)
+                webapi.run_stack(self.root, [a, b], m)
 
     @unittest.skipUnless(HAVE, "ffmpeg absent")
     def test_stack_ok(self) -> None:
-        r = webapi.run_stack(self.root, "a.mp4", "a.mp4", "cote")
+        r = webapi.run_stack(self.root, ["a.mp4", "a.mp4"], "cote")
         self.assertEqual(r["out"], "collage/a__a-cote.mp4")
         self.assertTrue((self.root / "output" / "collage" / "a__a-cote.mp4").is_file())

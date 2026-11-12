@@ -104,7 +104,7 @@ async def stack(request: Request) -> Response:
         return _err(400, "JSON invalide")
     if not isinstance(body, dict) or any(not isinstance(body.get(k), str) for k in ("a", "b", "mode")):
         return _err(400, "a, b et mode attendus")
-    return await _call(webapi.run_stack, ROOT, body["a"], body["b"], body["mode"])
+    return await _call(webapi.run_stack, ROOT, body["videos"], body["mode"], body.get("fit", "ajuster"))
 
 
 app = Starlette(routes=[

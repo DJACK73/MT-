@@ -82,7 +82,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 
 <section id="outils"><h1>Outils son</h1><p class="sub">Vidéos de inbox/. Les fichiers créés vont dans output/, sans jamais écraser.</p>
 <div class="box" id="tl"></div>
-<div class="box"><h2>Coller deux vidéos</h2><div class="row"><label>Vidéo A<select id="sa"></select></label><label>Vidéo B<select id="sb"></select></label><label>Disposition<select id="sm"><option value="cote">Côte à côte</option><option value="dessus">L’une au-dessus de l’autre</option><option value="bout">Bout à bout</option><option value="incrust">Incrustation</option></select></label></div><div class="row" style="margin-top:14px"><button class="btn main" id="stk">Coller</button></div></div>
+<div class="box"><h2>Coller 2 à 4 vidéos</h2><div class="row"><label>Vidéo A<select id="sa"></select></label><label>Vidéo B<select id="sb"></select></label><label>Vidéo C<select id="sc"></select></label><label>Vidéo D<select id="sd"></select></label><label>Disposition<select id="sm"><option value="cote">Côte à côte</option><option value="dessus">L’une au-dessus de l’autre</option><option value="bout">Bout à bout</option><option value="incrust">Incrustation</option><option value="grille">Grille 2×2 (3-4 vidéos)</option></select></label><label>Cadrage<select id="sf"><option value="ajuster">Ajuster (barres noires)</option><option value="remplir">Remplir (recadrer)</option></select></label></div><div class="row" style="margin-top:14px"><button class="btn main" id="stk">Coller</button></div></div>
 <p class="msg" id="tmsg"></p></section>
 
 <section id="composer"><h1>Compose (facultatif)</h1><p class="sub">Seules les vidéos coupées à l’étape précédente apparaissent ici.</p>
@@ -197,10 +197,10 @@ $('dno').onclick=$('dok').onclick=()=>$('dlg').close();
 async function loadInbox(){try{const v=await api('/api/inbox');
  $('tl').innerHTML=v.length?v.map((n,i)=>`<div class="vid"><span class="nm">${esc(n)}</span><button class="btn" data-t="audio" data-i="${i}">Extraire le son</button><button class="btn" data-t="muet" data-i="${i}">Retirer le son</button></div>`).join(''):'<p class="sub" style="margin:0">Aucune vidéo dans inbox/.</p>';
 
- const opts=v.map((n,i)=>`<option value="${i}">${esc(n)}</option>`).join('');$('sa').innerHTML=opts;$('sb').innerHTML=opts;if(v.length>1)$('sb').value='1';
+ const opts=v.map((n,i)=>`<option value="${i}">${esc(n)}</option>`).join('');$('sa').innerHTML=opts;$('sb').innerHTML=opts;$('sc').innerHTML='<option value="">—</option>'+opts;$('sd').innerHTML=$('sc').innerHTML;if(v.length>1)$('sb').value='1';
  $('stk').onclick=async()=>{if(v.length<2){$('tmsg').textContent='Il faut au moins deux vidéos dans inbox/.';return}
   const k=$('stk');k.disabled=true;$('tmsg').textContent='Collage en cours… (plusieurs minutes pour une longue vidéo)';
-  try{const r=await api('/api/stack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({a:v[+$('sa').value],b:v[+$('sb').value],mode:$('sm').value})});$('tmsg').textContent='Créé : output/'+r.out}
+  try{const r=await api('/api/stack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({videos:['sa','sb','sc','sd'].map(k=>$(k).value).filter(x=>x!=='').map(x=>v[+x]),mode:$('sm').value,fit:$('sf').value})});$('tmsg').textContent='Créé : output/'+r.out}
   catch(x){$('tmsg').textContent=x.message}finally{k.disabled=false}};
  $('tl').onclick=async e=>{const b=e.target.closest('button[data-t]');if(!b)return;
   const bs=$('tl').querySelectorAll('button');bs.forEach(x=>x.disabled=true);$('tmsg').textContent='En cours…';
