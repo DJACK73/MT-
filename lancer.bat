@@ -1,5 +1,5 @@
 @echo off
-wsl -d Ubuntu --cd /home/x1_yoga2045/MT -- bash scripts/dashboard_up.sh
+wsl -d Ubuntu --cd /home/x1_yoga2045/MT -- bash scripts/web_up.sh
 if errorlevel 1 (
   echo Echec : voir le message ci-dessus.
   pause
