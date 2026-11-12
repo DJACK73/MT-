@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from . import avtools
 from pathlib import Path
 from .approval import PlanError, approve, is_approved, plan_id, save_plan
 from .avtools import extract_audio, remove_audio, stack_videos
@@ -113,7 +115,7 @@ def run_tool(root: Path, name: str, tool: str) -> dict:
 
 
 def run_stack(root: Path, a: str, b: str, mode: str) -> dict:
-    if mode not in ("cote", "dessus"):
+    if mode not in avtools.STACK_MODES:
         raise ValueError(f"disposition inconnue: {mode}")
     srcs = []
     for n in (a, b):
