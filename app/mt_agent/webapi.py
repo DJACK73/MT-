@@ -106,10 +106,10 @@ def run_tool(root: Path, name: str, tool: str) -> dict:
     if Path(name).name != name or src.suffix.lower() not in _VIDEO_EXT or not src.is_file():
         raise ValueError(f"vidéo invalide: {name}")
     fn, tail = _TOOLS[tool]
-    out = ensure_outside_inbox(root / "output" / (src.stem + tail), root)
+    out = ensure_outside_inbox(root / "output" / tool / (src.stem + tail), root)
     out.parent.mkdir(parents=True, exist_ok=True)
     fn(src, out)
-    return {"out": out.name, "tool": tool}
+    return {"out": f"{tool}/{out.name}", "tool": tool}
 
 
 def run_stack(root: Path, a: str, b: str, mode: str) -> dict:
@@ -121,7 +121,7 @@ def run_stack(root: Path, a: str, b: str, mode: str) -> dict:
         if Path(n).name != n or s.suffix.lower() not in _VIDEO_EXT or not s.is_file():
             raise ValueError(f"vidéo invalide: {n}")
         srcs.append(s)
-    out = ensure_outside_inbox(root / "output" / f"{srcs[0].stem}__{srcs[1].stem}-{mode}.mp4", root)
+    out = ensure_outside_inbox(root / "output" / "collage" / f"{srcs[0].stem}__{srcs[1].stem}-{mode}.mp4", root)
     out.parent.mkdir(parents=True, exist_ok=True)
     stack_videos(srcs[0], srcs[1], out, mode)
-    return {"out": out.name, "tool": "stack"}
+    return {"out": f"collage/{out.name}", "tool": "stack"}

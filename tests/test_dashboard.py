@@ -50,10 +50,10 @@ class Dashboard(unittest.TestCase):
         _btn(at, "Approuver").click().run()
         self.assertEqual(_metric(at, "Statut"), "Approuvé")
         self.assertFalse(_btn(at, "Exporter la vidéo assemblée").disabled)
-        self.assertEqual(list(self.out.glob("*.mp4")), [])      # approuver n'exporte jamais
+        self.assertEqual(list(self.out.rglob("*.mp4")), [])      # approuver n'exporte jamais
         _btn(at, "Exporter la vidéo assemblée").click().run()
         self.assertEqual(len(at.exception), 0)
-        self.assertEqual(len(list(self.out.glob("*.mp4"))), 1)
+        self.assertEqual(len(list((self.out / "assemble").glob("*.mp4"))), 1)
 
     def test_cases(self) -> None:
         at = AppTest.from_file(str(APP), default_timeout=60).run()
@@ -89,7 +89,7 @@ class Dashboard(unittest.TestCase):
         self.assertEqual(len(at.exception), 0)
         self.assertEqual(len(at.error), 0)
         self.assertEqual(sorted(f.name for f in self.out.glob("clips/*/*.mp4")), ["001.mp4", "002.mp4"])
-        self.assertEqual(list(self.out.glob("*.mp4")), [])
+        self.assertEqual(list((self.out / "assemble").glob("*.mp4")), [])
         self.assertFalse(_btn(at, "Exporter la vidéo assemblée").disabled)
 
     def test_decouper_en_lot(self) -> None:
@@ -151,7 +151,7 @@ class Dashboard(unittest.TestCase):
         _btn(at, "Exporter la vidéo assemblée").click().run()
         self.assertEqual(len(at.exception), 0)
         self.assertEqual(len(at.error), 0)
-        self.assertEqual(len(list(self.out.glob("*.mp4"))), 1)
+        self.assertEqual(len(list((self.out / "assemble").glob("*.mp4"))), 1)
 
     def _ready(self, at) -> None:
         at.text_input(key="spec").set_value("1-2").run()

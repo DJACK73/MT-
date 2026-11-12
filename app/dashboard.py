@@ -565,7 +565,7 @@ SPEED = {"Vitesse : 0,5×": 0.5, "Vitesse : 0,75×": 0.75, "Vitesse : 1×": 1.0,
 def _export_video(plan: Plan, look: Look, crf: int = 20) -> None:
     with st.spinner("Rendu de la vidéo en cours (plusieurs minutes possibles)…"):
         try:
-            mp4, _ = export_plan(plan, ROOT, ROOT / "output", crf=crf, look=look)
+            mp4, _ = export_plan(plan, ROOT, ROOT / "output" / "assemble", crf=crf, look=look)
         except ERRORS as e:
             st.error(str(e))
             return

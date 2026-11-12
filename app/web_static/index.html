@@ -67,7 +67,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 </head>
 <body>
 <div class="wrap">
-<header class="top"><b>🎬 MT · Montage</b><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), nettoyage (⑤).</p><p>③ : Sélection (cases) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.</p></div></details></header>
+<header class="top"><b>🎬 MT · Montage</b><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), nettoyage (⑥).</p><p>③ : Sélection (cases) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.</p></div></details></header>
 <nav id="nav" aria-label="Étapes"></nav>
 
 <section id="decouper"><h1>Découpe tes vidéos</h1><p class="sub">Rien n’est coché au départ. Une vidéo déjà coupée avec les mêmes options se rouvre sans redécoupe.</p>
@@ -116,7 +116,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <script>
 const $=i=>document.getElementById(i),fmt=x=>x.toFixed(1).replace('.',','),enc=encodeURIComponent;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const TABS=[['decouper','① Découper'],['outils','Outils'],['composer','② Composer'],['selection','③ Sélection'],['export','④ Export'],['nettoyage','⑤ Nettoyage']];
+const TABS=[['decouper','① Découper'],['composer','② Composer'],['selection','③ Sélection'],['export','④ Export'],['outils','⑤ Outils'],['nettoyage','⑥ Nettoyage']];
 const V=[{n:'Black Clover S06E175.mkv',cut:true},{n:'a1c8aca2a1cab83a5d604f0e1e1dbd82_1.mp4',cut:false},{n:'cristiano_ronaldo_king_of_dribbling_4k.mp4',cut:false},{n:'ib1.mp4',cut:false},{n:'ib2.mp4',cut:false}];
 const picked=new Set();
 let P=null,cur='',order=[],saved=[],fm='9:16';

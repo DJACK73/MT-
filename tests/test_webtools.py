@@ -40,10 +40,10 @@ class WebTools(unittest.TestCase):
 
     @unittest.skipUnless(HAVE, "ffmpeg absent")
     def test_audio_and_muet_in_output(self) -> None:
-        self.assertEqual(webapi.run_tool(self.root, "a.mp4", "audio")["out"], "a.m4a")
-        self.assertEqual(webapi.run_tool(self.root, "a.mp4", "muet")["out"], "a-muet.mp4")
-        self.assertTrue((self.root / "output" / "a.m4a").is_file())
-        self.assertTrue((self.root / "output" / "a-muet.mp4").is_file())
+        self.assertEqual(webapi.run_tool(self.root, "a.mp4", "audio")["out"], "audio/a.m4a")
+        self.assertEqual(webapi.run_tool(self.root, "a.mp4", "muet")["out"], "muet/a-muet.mp4")
+        self.assertTrue((self.root / "output" / "audio" / "a.m4a").is_file())
+        self.assertTrue((self.root / "output" / "muet" / "a-muet.mp4").is_file())
         self.assertEqual(webapi.list_inbox(self.root), ["a.mp4"])
 
     @unittest.skipUnless(HAVE, "ffmpeg absent")
@@ -61,5 +61,5 @@ class WebTools(unittest.TestCase):
     @unittest.skipUnless(HAVE, "ffmpeg absent")
     def test_stack_ok(self) -> None:
         r = webapi.run_stack(self.root, "a.mp4", "a.mp4", "cote")
-        self.assertEqual(r["out"], "a__a-cote.mp4")
-        self.assertTrue((self.root / "output" / "a__a-cote.mp4").is_file())
+        self.assertEqual(r["out"], "collage/a__a-cote.mp4")
+        self.assertTrue((self.root / "output" / "collage" / "a__a-cote.mp4").is_file())
