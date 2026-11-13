@@ -102,8 +102,10 @@ async def stack(request: Request) -> Response:
         body = await request.json()
     except ValueError:
         return _err(400, "JSON invalide")
-    if not isinstance(body, dict) or any(not isinstance(body.get(k), str) for k in ("a", "b", "mode")):
-        return _err(400, "a, b et mode attendus")
+    v = body.get("videos") if isinstance(body, dict) else None
+    if (not isinstance(v, list) or not all(isinstance(x, str) for x in v)
+            or not isinstance(body.get("mode"), str) or not isinstance(body.get("fit", "ajuster"), str)):
+        return _err(400, "videos (liste), mode et fit attendus")
     return await _call(webapi.run_stack, ROOT, body["videos"], body["mode"], body.get("fit", "ajuster"))
 
 
