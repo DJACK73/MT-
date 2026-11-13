@@ -71,13 +71,12 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <nav id="nav" aria-label="Étapes"></nav>
 
 <section id="decouper"><h1>Découpe tes vidéos</h1><p class="sub">Rien n’est coché au départ. Une vidéo déjà coupée avec les mêmes options se rouvre sans redécoupe.</p>
-<p class="demo">Écran de démonstration : pas encore branché à MT.</p>
 <div class="box" id="vids"></div>
 <div class="box"><h2>Options</h2><div class="row">
-<label>Sensibilité<input type="number" value="0.35" step="0.05" style="width:90px"></label>
-<label>Min (s)<input type="number" value="3" style="width:80px"></label>
-<label>Max (s)<input type="number" value="5" style="width:80px"></label>
-<label>Cadrage<select><option>9:16</option><option>16:9</option><option>1:1</option></select></label></div></div>
+<label>Sensibilité<input id="cutth" type="number" value="0.35" step="0.05" style="width:90px"></label>
+<label>Min (s)<input id="cutmin" type="number" value="3" style="width:80px"></label>
+<label>Max (s)<input id="cutmax" type="number" value="5" style="width:80px"></label>
+<label>Cadrage<select id="cutfit"><option value="blur_pad">Bandes floues</option><option value="crop_center">Recadré au centre</option></select></label></div></div>
 <button class="btn main" id="cut">Découper la sélection</button><p class="msg" id="cutmsg"></p></section>
 
 <section id="outils"><h1>Outils son</h1><p class="sub">Vidéos de inbox/. Les fichiers créés vont dans output/, sans jamais écraser.</p>
@@ -117,7 +116,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 const $=i=>document.getElementById(i),fmt=x=>x.toFixed(1).replace('.',','),enc=encodeURIComponent;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const TABS=[['decouper','① Découper'],['composer','② Composer'],['selection','③ Sélection'],['export','④ Export'],['outils','⑤ Outils'],['nettoyage','⑥ Nettoyage']];
-const V=[{n:'Black Clover S06E175.mkv',cut:true},{n:'a1c8aca2a1cab83a5d604f0e1e1dbd82_1.mp4',cut:false},{n:'cristiano_ronaldo_king_of_dribbling_4k.mp4',cut:false},{n:'ib1.mp4',cut:false},{n:'ib2.mp4',cut:false}];
+let V=[];
 const picked=new Set();
 let P=null,cur='',order=[],saved=[],fm='9:16';
 const api=async(u,o)=>{const r=await fetch(u,o);let j=null;try{j=await r.json()}catch(e){}
@@ -184,8 +183,16 @@ $('apply').onclick=async()=>{
 $('appr').onclick=async()=>{
  try{const r=await api('/api/plan/'+enc(cur)+'/approve',{method:'POST'});
   await loadPlans((r&&r.name)||cur);msg('Plan approuvé.')}catch(e){msg(e.message)}};
-$('cut').onclick=()=>{const k=[...picked];if(!k.length){$('cutmsg').textContent='Coche au moins une vidéo.';return}
- k.forEach(i=>V[i].cut=true);picked.clear();$('cutmsg').textContent=k.length+' vidéo(s) coupée(s) (démonstration).';drawV()};
+$('cut').onclick=async()=>{const k=[...picked];if(!k.length){$('cutmsg').textContent='Coche au moins une vidéo.';return}
+ const b=$('cut');b.disabled=true;let ok=0,re=0,last='';
+ try{for(const [j,i] of k.entries()){$('cutmsg').textContent='Découpe '+(j+1)+'/'+k.length+' : '+V[i].n+' (plusieurs minutes pour une longue vidéo)…';
+  const mx=$('cutmax').value;
+  const r=await api('/api/cut',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:V[i].n,threshold:+$('cutth').value,min:+$('cutmin').value,max:mx===''?null:+mx,framing:$('cutfit').value})});
+  r.reused?re++:ok++;last=r.name}
+  $('cutmsg').textContent=ok+' découpée(s), '+re+' rouverte(s) sans redécoupe.';picked.clear()}
+ catch(e){$('cutmsg').textContent=e.message}
+ b.disabled=false;await loadVideos();
+ if(last&&typeof loadPlans==='function'){try{await loadPlans(last)}catch(e){}}};
 $('goSel').onclick=()=>location.hash='#selection';
 $('fmt').innerHTML=['9:16','16:9','1:1'].map(f=>`<button class="btn ${f==fm?'on':''}" data-f="${f}">${f}</button>`).join('');
 $('fmt').onclick=e=>{const f=e.target.dataset.f;if(!f)return;fm=f;$('fmt').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.f==f));drawS()};
@@ -194,6 +201,8 @@ const L=[['Niveau 1','Supprime les plans, vignettes et aperçus. Coupe d’abord
 $('lvls').innerHTML=L.map((l,i)=>`<div class="lvl"><div><b>${l[0]}</b><p>${l[1]}</p></div><button class="btn bad" data-i="${i}">Nettoyer</button></div>`).join('');
 $('lvls').onclick=e=>{const i=e.target.dataset.i;if(i==null)return;$('dtxt').textContent=L[i][2]+'. Irréversible (démonstration : rien n’est supprimé).';$('dlg').showModal()};
 $('dno').onclick=$('dok').onclick=()=>$('dlg').close();
+async function loadVideos(){try{V=await api('/api/videos')}catch(e){V=[];$('cutmsg').textContent=e.message}drawV()}
+loadVideos();
 async function loadInbox(){try{const v=await api('/api/inbox');
  $('tl').innerHTML=v.length?v.map((n,i)=>`<div class="vid"><span class="nm">${esc(n)}</span><button class="btn" data-t="audio" data-i="${i}">Extraire le son</button><button class="btn" data-t="muet" data-i="${i}">Retirer le son</button></div>`).join(''):'<p class="sub" style="margin:0">Aucune vidéo dans inbox/.</p>';
 

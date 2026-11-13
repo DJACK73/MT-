@@ -4,9 +4,10 @@ from . import avtools
 from pathlib import Path
 from .approval import PlanError, approve, is_approved, plan_id, save_plan
 from .avtools import extract_audio, remove_audio, stack_videos
+from .cmd import scan_video
 from .compose import letter
 from .fit import window_flag
-from .models import Plan
+from .models import Options, Plan
 from .paths import ensure_outside_inbox
 from .selection import select_scenes
 from .thumbs import make_thumbnails
@@ -135,3 +136,43 @@ def run_stack(root: Path, names: list[str], mode: str, fit: str = "ajuster") -> 
     out.parent.mkdir(parents=True, exist_ok=True)
     stack_videos(srcs, out, mode, fit)
     return {"out": f"collage/{out.name}", "tool": "stack"}
+
+
+def _plans(root: Path) -> list[tuple[Path, Plan]]:
+    d = _dir(root)
+    if not d.is_dir():
+        return []
+    out: list[tuple[Path, Plan]] = []
+    for p in sorted((x for x in d.iterdir() if x.is_file() and x.suffix == ".json"),
+                    key=lambda x: x.stat().st_mtime, reverse=True):
+        try:
+            out.append((p, Plan.model_validate_json(p.read_text())))
+        except (ValueError, OSError):
+            continue
+    return out
+
+
+def list_videos(root: Path) -> list[dict]:
+    cut = {Path(s.path).name for _, pl in _plans(root) for s in pl.sources}
+    return [{"n": n, "cut": n in cut} for n in list_inbox(root)]
+
+
+def run_cut(root: Path, name: str, threshold: float, min_s: float, max_s: float | None,
+            framing: str = "blur_pad") -> dict:
+    src = root / "inbox" / name
+    if Path(name).name != name or src.suffix.lower() not in _VIDEO_EXT or not src.is_file():
+        raise ValueError(f"vidéo invalide: {name}")
+    if max_s is not None and max_s < min_s:
+        raise ValueError("max doit être >= min")
+    opt = Options(threshold=threshold, min_scene_seconds=min_s, max_scene_seconds=max_s, framing=framing)
+    try:
+        rel = str(src.resolve().relative_to(root.resolve()))
+    except ValueError:
+        rel = str(src.resolve())
+    for p, pl in _plans(root):
+        if len(pl.sources) == 1 and pl.sources[0].path == rel and pl.options == opt:
+            return {"name": p.name, "reused": True, "scenes": len(pl.scenes)}
+    plan = scan_video(src, root, opt)
+    d = ensure_outside_inbox(_dir(root), root)
+    d.mkdir(parents=True, exist_ok=True)
+    return {"name": save_plan(plan, d).name, "reused": False, "scenes": len(plan.scenes)}

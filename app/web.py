@@ -109,6 +109,29 @@ async def stack(request: Request) -> Response:
     return await _call(webapi.run_stack, ROOT, body["videos"], body["mode"], body.get("fit", "ajuster"))
 
 
+async def videos(request: Request) -> Response:
+    return await _call(webapi.list_videos, ROOT)
+
+
+def _num(x: Any) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+async def cut(request: Request) -> Response:
+    try:
+        body = await request.json()
+    except ValueError:
+        return _err(400, "JSON invalide")
+    if (not isinstance(body, dict) or not isinstance(body.get("name"), str)
+            or not _num(body.get("threshold")) or not _num(body.get("min"))
+            or not (body.get("max") is None or _num(body.get("max")))
+            or not isinstance(body.get("framing", "blur_pad"), str)):
+        return _err(400, "name, threshold, min, max (ou null) et framing attendus")
+    mx = body.get("max")
+    return await _call(webapi.run_cut, ROOT, body["name"], float(body["threshold"]), float(body["min"]),
+                       None if mx is None else float(mx), body.get("framing", "blur_pad"))
+
+
 app = Starlette(routes=[
     Route("/", index),
     Route("/api/plans", plans),
@@ -119,4 +142,6 @@ app = Starlette(routes=[
     Route("/api/inbox", inbox),
     Route("/api/tool", tool, methods=["POST"]),
     Route("/api/stack", stack, methods=["POST"]),
+    Route("/api/videos", videos),
+    Route("/api/cut", cut, methods=["POST"]),
 ])
