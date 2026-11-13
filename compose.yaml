@@ -26,6 +26,7 @@ services:
 
   web:
     profiles: ["web"]
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile.dashboard
