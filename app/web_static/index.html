@@ -6,6 +6,7 @@
 <title>MT — Montage</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🎬%3C/text%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem('mt-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
 <style>
 :root{--bg:#e8ebee;--panel:#f6f7f8;--ink:#161b24;--mute:#5d6674;--line:#c9cfd6;--sel:#2b3fd6;--on:#fff;--warn:#d98a00;--bad:#c0322b;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -67,7 +68,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 </head>
 <body>
 <div class="wrap">
-<header class="top"><b>🎬 MT · Montage</b><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), nettoyage (⑥).</p><p>③ : Sélection (cases) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.</p></div></details></header>
+<header class="top"><b>🎬 MT · Montage</b><div style="display:flex;gap:10px;align-items:center"><select id="theme" aria-label="Thème"><option value="auto">Thème : auto</option><option value="light">Thème : clair</option><option value="dark">Thème : sombre</option></select><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), nettoyage (⑥).</p><p>③ : Sélection (cases) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.</p></div></details></div></header>
 <nav id="nav" aria-label="Étapes"></nav>
 
 <section id="decouper"><h1>Découpe tes vidéos</h1><p class="sub">Rien n’est coché au départ. Une vidéo déjà coupée avec les mêmes options se rouvre sans redécoupe.</p>
@@ -194,6 +195,9 @@ $('cut').onclick=async()=>{const k=[...picked];if(!k.length){$('cutmsg').textCon
  b.disabled=false;await loadVideos();
  if(last&&typeof loadPlans==='function'){try{await loadPlans(last)}catch(e){}}};
 $('goSel').onclick=()=>location.hash='#selection';
+(()=>{const s=$('theme'),r=document.documentElement;let t='auto';try{t=localStorage.getItem('mt-theme')||'auto'}catch(e){}
+ const ap=v=>v==='auto'?r.removeAttribute('data-theme'):r.setAttribute('data-theme',v);
+ s.value=t;ap(t);s.onchange=()=>{ap(s.value);try{localStorage.setItem('mt-theme',s.value)}catch(e){}}})();
 $('fmt').innerHTML=['9:16','16:9','1:1'].map(f=>`<button class="btn ${f==fm?'on':''}" data-f="${f}">${f}</button>`).join('');
 $('fmt').onclick=e=>{const f=e.target.dataset.f;if(!f)return;fm=f;$('fmt').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.f==f));drawS()};
 $('ex1').onclick=()=>$('exmsg').textContent='Démonstration : aucun export lancé.';$('ex2').onclick=$('ex1').onclick;
