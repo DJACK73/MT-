@@ -129,6 +129,20 @@ async def job(request: Request) -> Response:
     return _Json(webapi.get_job())
 
 
+async def clean(request: Request) -> Response:
+    level = request.path_params["level"]
+    if request.method == "GET":
+        return await _call(webapi.clean_preview, ROOT, level)
+    try:
+        body = await request.json()
+    except ValueError:
+        return _err(400, "JSON invalide")
+    c = body.get("confirm") if isinstance(body, dict) else None
+    if isinstance(c, bool) or c != level:
+        return _err(400, "confirmation requise : confirm = niveau")
+    return await _call(webapi.do_clean, ROOT, level)
+
+
 def _num(x: Any) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool)
 
@@ -162,4 +176,5 @@ app = Starlette(routes=[
     Route("/api/cut", cut, methods=["POST"]),
     Route("/api/export", export, methods=["POST"]),
     Route("/api/job", job),
+    Route("/api/clean/{level:int}", clean, methods=["GET", "POST"]),
 ])

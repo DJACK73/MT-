@@ -106,8 +106,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <div class="row" style="margin-top:16px"><button class="btn main" id="ex1" disabled>Exporter la vidéo assemblée</button><button class="btn" id="ex2" disabled>Exporter en clips séparés</button></div><p class="msg" id="exmsg"></p></div></section>
 
 <section id="nettoyage"><h1>Fais de la place</h1><p class="sub">Chaque niveau supprime des fichiers de travail. Tes vidéos sources ne sont pas touchées.</p>
-<p class="demo">Écran de démonstration : pas encore branché à MT.</p>
-<div class="box" id="lvls"></div></section>
+<div class="box" id="lvls"></div><p class="msg" id="clmsg"></p></section>
 </div>
 
 <dialog id="dlg"><h2>Confirmer le nettoyage</h2><p id="dtxt"></p><div class="row"><button class="btn bad" id="dok">Confirmer</button><button class="btn" id="dno">Annuler</button></div></dialog>
@@ -212,10 +211,18 @@ async function pollJob(){try{const j=await api('/api/job');
  updEx()}catch(e){exBusy=false;$('exmsg').textContent=e.message}}
 async function startEx(kind){try{await api('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:cur,kind:kind,ratio:fm,speed:+$('exspeed').value,quality:$('exq').value,audio:$('exaudio').value})});exBusy=true;updEx();pollJob()}catch(e){$('exmsg').textContent=e.message}}
 $('ex1').onclick=()=>startEx('video');$('ex2').onclick=()=>startEx('clips');pollJob();updEx();
-const L=[['Niveau 1','Supprime les plans, vignettes et aperçus. Coupe d’abord tes vidéos si tu as besoin des plans.','6 élément(s), 1,2 Mo'],['Niveau 2','Ajoute les sorties exportées.','9 élément(s), 148 Mo'],['Niveau 3','Ajoute les rendus intermédiaires et le cache.','14 élément(s), 730 Mo']];
-$('lvls').innerHTML=L.map((l,i)=>`<div class="lvl"><div><b>${l[0]}</b><p>${l[1]}</p></div><button class="btn bad" data-i="${i}">Nettoyer</button></div>`).join('');
-$('lvls').onclick=e=>{const i=e.target.dataset.i;if(i==null)return;$('dtxt').textContent=L[i][2]+'. Irréversible (démonstration : rien n’est supprimé).';$('dlg').showModal()};
-$('dno').onclick=$('dok').onclick=()=>$('dlg').close();
+const L=[[1,'Niveau 1','Supprime les plans, vignettes et aperçus. Coupe d’abord tes vidéos si tu as besoin des plans.'],[2,'Niveau 2','Ajoute les sorties exportées (dossier output).']];
+$('lvls').innerHTML=L.map(l=>`<div class="lvl"><div><b>${l[1]}</b><p>${l[2]}</p></div><button class="btn bad" data-l="${l[0]}">Nettoyer</button></div>`).join('')+`<div class="lvl"><div><b>Niveau 3</b><p>Vider inbox : supprime les vidéos dans l’Explorateur Windows (dossier en lecture seule ici).</p></div><button class="btn" disabled>Indisponible</button></div>`;
+let clLvl=0;
+$('lvls').onclick=async e=>{const l=+e.target.dataset.l;if(!l)return;
+ try{const p=await api('/api/clean/'+l);clLvl=l;
+  $('dtxt').textContent=p.count+' élément(s), '+(p.bytes/1e6).toFixed(1).replace('.',',')+' Mo. Irréversible.';$('dok').disabled=p.count===0;$('dlg').showModal()}catch(x){$('clmsg').textContent=x.message}};
+$('dno').onclick=()=>$('dlg').close();
+$('dok').onclick=async()=>{const l=clLvl;$('dok').disabled=true;
+ try{const r=await api('/api/clean/'+l,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:l})});
+  $('dlg').close();$('clmsg').textContent=r.deleted+' élément(s) supprimé(s)'+(r.errors.length?' · erreurs : '+r.errors.join('; '):'');
+  await loadVideos();try{await loadPlans()}catch(x){}}
+ catch(x){$('dlg').close();$('clmsg').textContent=x.message}};
 async function loadVideos(){try{V=await api('/api/videos')}catch(e){V=[];$('cutmsg').textContent=e.message}drawV()}
 loadVideos();
 async function loadInbox(){try{const v=await api('/api/inbox');

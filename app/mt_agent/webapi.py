@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from . import avtools
 from .export import Look, export_clips, export_plan
+from .clean import plan_clean, run_clean, size_of
 from pathlib import Path
 from .approval import PlanError, approve, is_approved, plan_id, save_plan
 from .avtools import extract_audio, remove_audio, stack_videos
@@ -237,3 +238,22 @@ def start_export(root: Path, name: str, kind: str, ratio: str, speed: float,
     _THREAD = threading.Thread(target=work, daemon=True)
     _THREAD.start()
     return {"started": True}
+
+
+def _lvl(level: int) -> int:
+    if isinstance(level, bool) or level not in (1, 2):
+        raise ValueError("niveau 1 ou 2 attendu (inbox se vide dans l'Explorateur Windows)")
+    return level
+
+
+def clean_preview(root: Path, level: int) -> dict:
+    todo = plan_clean(root, _lvl(level))
+    return {"level": level, "count": len(todo), "bytes": sum(size_of(p) for p in todo)}
+
+
+def do_clean(root: Path, level: int) -> dict:
+    _lvl(level)
+    if get_job().get("state") == "running":
+        raise PlanError("un export est en cours : attends sa fin")
+    done, errs = run_clean(root, level)
+    return {"deleted": done, "errors": errs}
