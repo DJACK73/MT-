@@ -113,6 +113,22 @@ async def videos(request: Request) -> Response:
     return await _call(webapi.list_videos, ROOT)
 
 
+async def export(request: Request) -> Response:
+    try:
+        body = await request.json()
+    except ValueError:
+        return _err(400, "JSON invalide")
+    if not isinstance(body, dict) or not isinstance(body.get("name"), str):
+        return _err(400, "name attendu")
+    return await _call(webapi.start_export, ROOT, body["name"], body.get("kind"),
+                       body.get("ratio", "9:16"), body.get("speed", 1),
+                       body.get("quality", "normal"), body.get("audio", "none"))
+
+
+async def job(request: Request) -> Response:
+    return _Json(webapi.get_job())
+
+
 def _num(x: Any) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool)
 
@@ -144,4 +160,6 @@ app = Starlette(routes=[
     Route("/api/stack", stack, methods=["POST"]),
     Route("/api/videos", videos),
     Route("/api/cut", cut, methods=["POST"]),
+    Route("/api/export", export, methods=["POST"]),
+    Route("/api/job", job),
 ])

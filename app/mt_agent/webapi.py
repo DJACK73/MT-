@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import threading
 from . import avtools
+from .export import Look, export_clips, export_plan
 from pathlib import Path
 from .approval import PlanError, approve, is_approved, plan_id, save_plan
 from .avtools import extract_audio, remove_audio, stack_videos
@@ -176,3 +178,62 @@ def run_cut(root: Path, name: str, threshold: float, min_s: float, max_s: float 
     d = ensure_outside_inbox(_dir(root), root)
     d.mkdir(parents=True, exist_ok=True)
     return {"name": save_plan(plan, d).name, "reused": False, "scenes": len(plan.scenes)}
+
+
+_JOB: dict = {"state": "idle"}
+_LOCK = threading.Lock()
+_THREAD: threading.Thread | None = None
+_QUALITY = {"normal": 20, "haute": 16}
+
+
+def get_job() -> dict:
+    with _LOCK:
+        return dict(_JOB)
+
+
+def _rel(p: Path, root: Path) -> str:
+    try:
+        return str(Path(p).relative_to(root))
+    except ValueError:
+        return str(p)
+
+
+def start_export(root: Path, name: str, kind: str, ratio: str, speed: float,
+                 quality: str, audio: str) -> dict:
+    global _THREAD
+    if kind not in ("video", "clips"):
+        raise ValueError(f"type d'export inconnu: {kind}")
+    if ratio not in ("9:16", "16:9", "1:1"):
+        raise ValueError(f"format inconnu: {ratio}")
+    if audio not in ("none", "source"):
+        raise ValueError(f"son inconnu: {audio}")
+    if quality not in _QUALITY:
+        raise ValueError(f"qualité inconnue: {quality}")
+    if isinstance(speed, bool) or not isinstance(speed, (int, float)) or not 0.5 <= speed <= 2:
+        raise ValueError("vitesse: nombre entre 0,5 et 2 attendu")
+    plan = _load(root, name)
+    with _LOCK:
+        if _JOB.get("state") == "running":
+            raise PlanError("un export est déjà en cours")
+        _JOB.clear()
+        _JOB.update(state="running", kind=kind, name=name)
+    look = Look(ratio=ratio, speed=float(speed), audio=audio)
+    crf = _QUALITY[quality]
+
+    def work() -> None:
+        try:
+            if kind == "video":
+                mp4, _ = export_plan(plan, root, root / "output" / "assemble", crf=crf, look=look)
+                outs = [mp4]
+            else:
+                outs = export_clips(plan, root, root / "output", crf=crf, look=look)
+            res = {"state": "done", "files": [_rel(p, root) for p in outs]}
+        except Exception as e:
+            res = {"state": "error", "error": str(e)}
+        with _LOCK:
+            _JOB.clear()
+            _JOB.update(res, kind=kind, name=name)
+
+    _THREAD = threading.Thread(target=work, daemon=True)
+    _THREAD.start()
+    return {"started": True}

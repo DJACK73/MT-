@@ -99,12 +99,11 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <div class="grid" id="grid"></div></section>
 
 <section id="export"><h1>Exporte ton montage</h1><p class="sub" id="recap"></p>
-<p class="demo">Écran de démonstration : pas encore branché à MT.</p>
 <div class="box"><h2>Réglages</h2>
 <details open><summary>Cadrage et format</summary><div class="row" id="fmt"></div></details>
-<details><summary>Son</summary><div class="row"><label>Source du son<select><option>Sans audio</option><option>Audio de la vidéo</option><option>Musique</option></select></label><label>Écho<select><option>Aucun</option><option>Léger</option></select></label></div></details></div>
-<div class="box"><h2>Export</h2><div class="row"><label>Vitesse<select><option>1×</option><option>0,5×</option><option>1,5×</option><option>2×</option></select></label><label>Qualité<select><option>Normal</option><option>Haute</option></select></label></div>
-<div class="row" style="margin-top:16px"><button class="btn main" id="ex1">Exporter la vidéo assemblée</button><button class="btn" id="ex2">Exporter en clips séparés</button></div><p class="msg" id="exmsg"></p></div></section>
+<details><summary>Son</summary><div class="row"><label>Source du son<select id="exaudio"><option value="none">Sans audio</option><option value="source">Audio de la vidéo</option></select></label></div></details></div>
+<div class="box"><h2>Export</h2><div class="row"><label>Vitesse<select id="exspeed"><option value="1">1×</option><option value="0.5">0,5×</option><option value="1.5">1,5×</option><option value="2">2×</option></select></label><label>Qualité<select id="exq"><option value="normal">Normal</option><option value="haute">Haute</option></select></label></div>
+<div class="row" style="margin-top:16px"><button class="btn main" id="ex1" disabled>Exporter la vidéo assemblée</button><button class="btn" id="ex2" disabled>Exporter en clips séparés</button></div><p class="msg" id="exmsg"></p></div></section>
 
 <section id="nettoyage"><h1>Fais de la place</h1><p class="sub">Chaque niveau supprime des fichiers de travail. Tes vidéos sources ne sont pas touchées.</p>
 <p class="demo">Écran de démonstration : pas encore branché à MT.</p>
@@ -200,7 +199,19 @@ $('goSel').onclick=()=>location.hash='#selection';
  s.value=t;ap(t);s.onchange=()=>{ap(s.value);try{localStorage.setItem('mt-theme',s.value)}catch(e){}}})();
 $('fmt').innerHTML=['9:16','16:9','1:1'].map(f=>`<button class="btn ${f==fm?'on':''}" data-f="${f}">${f}</button>`).join('');
 $('fmt').onclick=e=>{const f=e.target.dataset.f;if(!f)return;fm=f;$('fmt').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.f==f));drawS()};
-$('ex1').onclick=()=>$('exmsg').textContent='Démonstration : aucun export lancé.';$('ex2').onclick=$('ex1').onclick;
+let exBusy=false,exT=null;
+function updEx(){const ok=!!P&&!!P.approved&&same(order,saved)&&order.length>0&&!exBusy;
+ $('ex1').disabled=!ok;$('ex2').disabled=!ok;
+ if(!exBusy&&!ok)$('exmsg').textContent=P?'Approuve d’abord la sélection en ③.':'Aucun plan : coupe une vidéo en ①.'}
+const _d=drawS;drawS=function(){_d();updEx()};
+async function pollJob(){try{const j=await api('/api/job');
+ if(j.state==='running'){exBusy=true;$('exmsg').textContent='Export en cours… (plusieurs minutes, ne ferme pas la page)';clearTimeout(exT);exT=setTimeout(pollJob,2000);updEx();return}
+ exBusy=false;
+ if(j.state==='done')$('exmsg').textContent='Terminé : '+j.files.join(', ');
+ else if(j.state==='error')$('exmsg').textContent='Erreur : '+j.error;
+ updEx()}catch(e){exBusy=false;$('exmsg').textContent=e.message}}
+async function startEx(kind){try{await api('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:cur,kind:kind,ratio:fm,speed:+$('exspeed').value,quality:$('exq').value,audio:$('exaudio').value})});exBusy=true;updEx();pollJob()}catch(e){$('exmsg').textContent=e.message}}
+$('ex1').onclick=()=>startEx('video');$('ex2').onclick=()=>startEx('clips');pollJob();updEx();
 const L=[['Niveau 1','Supprime les plans, vignettes et aperçus. Coupe d’abord tes vidéos si tu as besoin des plans.','6 élément(s), 1,2 Mo'],['Niveau 2','Ajoute les sorties exportées.','9 élément(s), 148 Mo'],['Niveau 3','Ajoute les rendus intermédiaires et le cache.','14 élément(s), 730 Mo']];
 $('lvls').innerHTML=L.map((l,i)=>`<div class="lvl"><div><b>${l[0]}</b><p>${l[1]}</p></div><button class="btn bad" data-i="${i}">Nettoyer</button></div>`).join('');
 $('lvls').onclick=e=>{const i=e.target.dataset.i;if(i==null)return;$('dtxt').textContent=L[i][2]+'. Irréversible (démonstration : rien n’est supprimé).';$('dlg').showModal()};
