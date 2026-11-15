@@ -72,6 +72,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .menu .gbody{width:min(280px,92vw)}.menu .gbody label{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;color:var(--mute);font-size:14px}
 [data-w=wide] .wrap{max-width:1200px}
 .card.fl img{transform:scaleX(-1)}
+.src{position:absolute;left:6px;bottom:6px;min-width:22px;text-align:center;border-radius:6px;padding:1px 6px;font-size:13px;font-weight:800;color:#fff}
 [hidden]{display:none!important}
 #cord .vid{display:flex;gap:8px;align-items:center;margin-bottom:6px}#cord .nm{flex:1;min-width:0}#cord .btn{padding:4px 10px}
 #cpl details.box{margin-bottom:12px}#cpl .grid{margin-top:12px}
@@ -79,7 +80,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 </head>
 <body>
 <div class="wrap">
-<header class="top"><b>🎬 MT · Montage</b><div style="display:flex;gap:10px;align-items:center"><details class="guide menu" style="order:1"><summary aria-label="Réglages">⋮</summary><div class="gbody"><label>Thème<select id="theme"><option value="auto">Auto</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label><label>Largeur<select id="wid"><option value="narrow">Étroite</option><option value="wide">Large</option></select></label></div></details><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), outils son et collage (⑤), nettoyage (⑥).</p><p>③ : Sélection (cases, ▶ voir, miroir, Inverser) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.</p></div></details></div></header>
+<header class="top"><b>🎬 MT · Montage</b><div style="display:flex;gap:10px;align-items:center"><details class="guide menu" style="order:1"><summary aria-label="Réglages">⋮</summary><div class="gbody"><label>Thème<select id="theme"><option value="auto">Auto</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label><label>Largeur<select id="wid"><option value="narrow">Étroite</option><option value="wide">Large</option></select></label></div></details><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), outils son et collage (⑤), nettoyage (⑥).</p><p>③ : Sélection (cases, ▶ voir, miroir, Inverser) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de inbox/musique/ (une vidéo placée là est convertie en audio) ; le calage sur les battements est une option décochée.</p><p>Dossiers : vidéos dans inbox/videos/, musique dans inbox/musique/. ② : choisis des scènes de plusieurs vidéos coupées, ordonne-les (↑ ↓ ✕), « Créer le plan composé » ; en ③ chaque scène d’un plan composé affiche la lettre de sa vidéo d’origine.</p></div></details></div></header>
 <nav id="nav" aria-label="Étapes"></nav>
 
 <section id="decouper"><h1>Découpe tes vidéos</h1><p class="sub">Rien n’est coché au départ. Une vidéo déjà coupée avec les mêmes options se rouvre sans redécoupe.</p>
@@ -165,7 +166,7 @@ function drawS(){
  S.forEach(s=>{const r=order.indexOf(s.n)+1,on=r>0,fl=s.flag?(s.flag===true?'noire':String(s.flag)):'';
   const b=document.createElement('button');b.className='seg'+(on?' on':'');b.style.flex=Math.max(dur(s),.2)+' 1 0';b.textContent=on?r:'';b.title='Scène '+s.n;b.setAttribute('aria-pressed',on);b.onclick=()=>tg(s.n);$('strip').append(b);
   const c=document.createElement('button');c.className='card'+(on?' on':'')+(mir.has(s.n)?' fl':'');c.setAttribute('aria-pressed',on);
-  c.innerHTML=`<div class="thumb"><img data-src="/api/plan/${enc(cur)}/thumb/${s.n}" alt=""><span class="rank">${r||''}</span>${mir.has(s.n)?'<span class="mir" title="Miroir">⇋</span>':''}${fl?`<span class="badge">${esc(fl)}</span>`:''}</div><div class="meta"><span>Scène ${s.n}</span><span>${fmt(dur(s))} s</span></div>`;
+  c.innerHTML=`<div class="thumb"><img data-src="/api/plan/${enc(cur)}/thumb/${s.n}" alt=""><span class="rank">${r||''}</span>${mir.has(s.n)?'<span class="mir" title="Miroir">⇋</span>':''}${s.source?`<span class="src" style="background:hsl(${Math.max(0,'ABCDEFGH'.indexOf(s.source))*70+230} 55% 38%)" title="Vidéo ${esc(s.source)}">${esc(s.source)}</span>`:''}${fl?`<span class="badge">${esc(fl)}</span>`:''}</div><div class="meta"><span>Scène ${s.n}</span><span>${fmt(dur(s))} s</span></div>`;
   c.onclick=()=>tg(s.n);
   const w=document.createElement('div');w.className='cw';const t=document.createElement('div');t.className='cb';
   const v=document.createElement('button');v.className='btn';v.textContent='▶ voir';v.onclick=()=>pvShow(s.n);
@@ -299,7 +300,7 @@ $('cmake').onclick=async()=>{if(!cpOrd.length)return;const k=cpOrd.length,by=new
  cpMark()};
 const _rt=route;route=function(){_rt();if((location.hash||'').slice(1)==='composer')loadComposer()};
 $('ex1').onclick=()=>startEx('video');$('ex2').onclick=()=>startEx('clips');pollJob();updEx();
-const L=[[1,'Niveau 1','Supprime les plans, vignettes et aperçus. Coupe d’abord tes vidéos si tu as besoin des plans.'],[2,'Niveau 2','Ajoute les sorties exportées (dossier output).']];
+const L=[[1,'Niveau 1','Supprime les plans, vignettes et aperçus (dont le cache audio de la musique). Coupe d’abord tes vidéos si tu as besoin des plans.'],[2,'Niveau 2','Ajoute les sorties exportées (dossier output).']];
 $('lvls').innerHTML=L.map(l=>`<div class="lvl"><div><b>${l[1]}</b><p>${l[2]}</p></div><button class="btn bad" data-l="${l[0]}">Nettoyer</button></div>`).join('')+`<div class="lvl"><div><b>Niveau 3</b><p>Vider inbox : supprime les vidéos dans l’Explorateur Windows (dossier en lecture seule ici).</p></div><button class="btn" disabled>Indisponible</button></div>`;
 let clLvl=0;
 $('lvls').onclick=async e=>{const l=+e.target.dataset.l;if(!l)return;
