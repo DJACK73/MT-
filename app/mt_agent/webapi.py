@@ -380,6 +380,8 @@ def start_export(root: Path, name: str, kind: str, ratio: str, speed: float,
     mir = _mirror(mir, len(plan.scenes))
     look = _look(root, ratio, float(speed), audio, mir, opts or {})
     with _LOCK:
+        if _CJOB.get("state") == "running":
+            raise PlanError("une découpe est en cours : attends sa fin")
         if _JOB.get("state") == "running":
             raise PlanError("un export est déjà en cours")
         _JOB.clear()
@@ -418,7 +420,7 @@ def clean_preview(root: Path, level: int) -> dict:
 
 def do_clean(root: Path, level: int) -> dict:
     _lvl(level)
-    if get_job().get("state") == "running":
+    if get_job().get("state") == "running" or get_cutjob().get("state") == "running":
         raise PlanError("un export est en cours : attends sa fin")
     done, errs = run_clean(root, level)
     return {"deleted": done, "errors": errs}

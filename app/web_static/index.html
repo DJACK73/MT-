@@ -219,6 +219,7 @@ async function pollCut(){clearTimeout(cutT);let j;
  if(j.state==='done'){const re=j.results.filter(r=>r.reused).length,ok=j.results.length-re;
   $('cutmsg').textContent=ok+' plan(s) créé(s), '+re+' rouvert(s)'+(j.errors.length?' · erreurs : '+j.errors.join(' ; '):'')+'.';picked.clear();
   await loadVideos();if(j.last&&typeof loadPlans==='function'){try{await loadPlans(j.last)}catch(e){}}}}
+api('/api/cutjob').then(j=>{if(j.state==='running'){$('cut').disabled=true;pollCut()}}).catch(()=>{});
 $('goSel').onclick=()=>location.hash='#selection';
 (()=>{const s=$('theme'),r=document.documentElement;let t='auto';try{t=localStorage.getItem('mt-theme')||'auto'}catch(e){}
  const ap=v=>v==='auto'?r.removeAttribute('data-theme'):r.setAttribute('data-theme',v);
