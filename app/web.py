@@ -88,6 +88,10 @@ async def inbox(request: Request) -> Response:
     return await _call(webapi.list_inbox, ROOT)
 
 
+async def music(request: Request) -> Response:
+    return await _call(webapi.list_music, ROOT)
+
+
 async def tool(request: Request) -> Response:
     try:
         body = await request.json()
@@ -123,7 +127,8 @@ async def export(request: Request) -> Response:
         return _err(400, "name attendu")
     return await _call(webapi.start_export, ROOT, body["name"], body.get("kind"),
                        body.get("ratio", "9:16"), body.get("speed", 1),
-                       body.get("quality", "normal"), body.get("audio", "none"), body.get("mirror", []))
+                       body.get("quality", "normal"), body.get("audio", "none"), body.get("mirror", []),
+                       body.get("opts"))
 
 
 async def job(request: Request) -> Response:
@@ -194,6 +199,7 @@ app = Starlette(routes=[
     Route("/api/plan/{name}/thumb/{n:int}", thumb),
     Route("/api/plan/{name}/preview/{n:int}", preview),
     Route("/api/inbox", inbox),
+    Route("/api/music", music),
     Route("/api/tool", tool, methods=["POST"]),
     Route("/api/stack", stack, methods=["POST"]),
     Route("/api/videos", videos),

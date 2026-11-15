@@ -186,6 +186,58 @@ _JOB: dict = {"state": "idle"}
 _LOCK = threading.Lock()
 _THREAD: threading.Thread | None = None
 _QUALITY = {"normal": 20, "haute": 16}
+_AUDIO_EXT = {".m4a", ".mp3", ".wav", ".ogg", ".flac", ".aac"}
+
+
+def list_music(root: Path) -> list:
+    d = root / "music"
+    if not d.is_dir():
+        return []
+    return sorted(p.name for p in d.iterdir() if p.is_file() and p.suffix.lower() in _AUDIO_EXT)
+
+
+def _num(o: dict, k: str, d: float, lo: float, hi: float) -> float:
+    v = o.get(k, d)
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not lo <= v <= hi:
+        raise ValueError(f"{k}: nombre entre {lo:g} et {hi:g} attendu")
+    return float(v)
+
+
+def _flag(o: dict, k: str) -> bool:
+    v = o.get(k, False)
+    if not isinstance(v, bool):
+        raise ValueError(f"{k}: booléen attendu")
+    return v
+
+
+def _look(root: Path, ratio: str, speed: float, audio: str, mir: frozenset, o: dict) -> Look:
+    if not isinstance(o, dict):
+        raise ValueError("options: objet attendu")
+    fit = o.get("fit")
+    if fit not in (None, "bars", "fill", "none"):
+        raise ValueError(f"cadrage inconnu: {fit}")
+    bg = o.get("background", "blur")
+    if bg not in ("blur", "black"):
+        raise ValueError(f"fond inconnu: {bg}")
+    music = None
+    if audio in ("music", "mix"):
+        m = o.get("music")
+        if not isinstance(m, str) or m not in list_music(root):
+            raise ValueError("musique: choisis un fichier de music/")
+        music = "music/" + m
+    echo = _flag(o, "echo")
+    if echo and audio == "none":
+        raise ValueError("écho: choisis un son")
+    sb, sc = _flag(o, "snap_beats"), _flag(o, "snap_clips")
+    if (sb or sc) and audio not in ("music", "mix"):
+        raise ValueError("calage: choisis musique ou mix")
+    return Look(fit=fit, background=bg, anchor=_num(o, "anchor", 0.5, 0, 1), ratio=ratio, audio=audio,
+                audio_db=_num(o, "audio_db", 0, -40, 12), music=music,
+                music_start=_num(o, "music_start", 0, 0, 3600), music_db=_num(o, "music_db", 0, -40, 12),
+                music_fade=_num(o, "music_fade", 0.3, 0, 0.5), echo=echo,
+                echo_ms=_num(o, "echo_ms", 120, 20, 1000), echo_decay=_num(o, "echo_decay", 0.3, 0, 0.7),
+                snap_beats=sb, snap_lo=_num(o, "snap_lo", 3, 0.5, 10), snap_clips=sc,
+                speed=speed, mirror_only=mir)
 
 
 def get_job() -> dict:
@@ -201,13 +253,14 @@ def _rel(p: Path, root: Path) -> str:
 
 
 def start_export(root: Path, name: str, kind: str, ratio: str, speed: float,
-                 quality: str, audio: str, mirror: list | None = None) -> dict:
+                 quality: str, audio: str, mirror: list | None = None,
+                 opts: dict | None = None) -> dict:
     global _THREAD
     if kind not in ("video", "clips"):
         raise ValueError(f"type d'export inconnu: {kind}")
     if ratio not in ("9:16", "16:9", "1:1"):
         raise ValueError(f"format inconnu: {ratio}")
-    if audio not in ("none", "source"):
+    if audio not in ("none", "source", "music", "mix"):
         raise ValueError(f"son inconnu: {audio}")
     if quality not in _QUALITY:
         raise ValueError(f"qualité inconnue: {quality}")
@@ -216,12 +269,12 @@ def start_export(root: Path, name: str, kind: str, ratio: str, speed: float,
     mir = _mirror(mirror or [])
     plan = _load(root, name)
     mir = _mirror(mir, len(plan.scenes))
+    look = _look(root, ratio, float(speed), audio, mir, opts or {})
     with _LOCK:
         if _JOB.get("state") == "running":
             raise PlanError("un export est déjà en cours")
         _JOB.clear()
         _JOB.update(state="running", kind=kind, name=name)
-    look = Look(ratio=ratio, speed=float(speed), audio=audio, mirror_only=mir)
     crf = _QUALITY[quality]
 
     def work() -> None:

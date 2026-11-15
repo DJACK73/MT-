@@ -72,6 +72,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .menu .gbody{width:min(280px,92vw)}.menu .gbody label{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;color:var(--mute);font-size:14px}
 [data-w=wide] .wrap{max-width:1200px}
 .card.fl img{transform:scaleX(-1)}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -108,9 +109,11 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 
 <section id="export"><h1>Exporte ton montage</h1><p class="sub" id="recap"></p>
 <div class="box"><h2>Réglages</h2>
-<details open><summary>Cadrage et format</summary><div class="row" id="fmt"></div></details>
-<details><summary>Son</summary><div class="row"><label>Source du son<select id="exaudio"><option value="none">Sans audio</option><option value="source">Audio de la vidéo</option></select></label></div></details></div>
-<div class="box"><h2>Export</h2><div class="row"><label>Vitesse<select id="exspeed"><option value="1">1×</option><option value="0.5">0,5×</option><option value="1.5">1,5×</option><option value="2">2×</option></select></label><label>Qualité<select id="exq"><option value="normal">Normal</option><option value="haute">Haute</option></select></label></div>
+<details open><summary>Cadrage et format</summary><div class="row" id="fmt"></div><div class="row" style="margin-top:12px"><label>Cadrage<select id="exfit"><option value="">Selon le plan</option><option value="bars">Bandes</option><option value="fill">Plein cadre</option><option value="none">Aucun</option></select></label><label id="lbg">Fond des bandes<select id="exbg"><option value="blur">Flou</option><option value="black">Noir</option></select></label><label id="lan">Ancrage<select id="exan"><option value="0.5">Centre</option><option value="0">Gauche</option><option value="1">Droite</option></select></label></div></details>
+<details open><summary>Son</summary><div class="row"><label>Source du son<select id="exaudio"><option value="none">Sans audio</option><option value="source">Audio de la vidéo</option><option value="music">Musique seule</option><option value="mix">Vidéo + musique</option></select></label><label id="sg">Volume vidéo (dB)<input id="exadb" type="number" value="0" step="1" style="width:80px"></label></div>
+<div class="row" id="sm" style="margin-top:12px"><label>Musique<select id="exmus"></select></label><label>Début (s)<input id="exms" type="number" value="0" min="0" step="0.5" style="width:80px"></label><label>Volume (dB)<input id="exmdb" type="number" value="0" step="1" style="width:80px"></label><label>Fondu (s)<input id="exmf" type="number" value="0.3" min="0" max="0.5" step="0.1" style="width:80px"></label><label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="exsnap"> Caler sur les battements</label><label id="slo">Durée min. (s)<input id="exlo" type="number" value="3" min="0.5" max="10" step="0.5" style="width:80px"></label></div>
+<div class="row" id="se" style="margin-top:12px"><label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="exech"> Écho</label><label id="sed">Retard (ms)<input id="exems" type="number" value="120" min="20" max="1000" step="10" style="width:80px"></label><label id="sedd">Niveau (0 à 0,7)<input id="exedc" type="number" value="0.3" min="0" max="0.7" step="0.1" style="width:80px"></label></div></details></div>
+<div class="box"><h2>Export</h2><p class="sub" id="sorec"></p><div class="row"><label>Vitesse<select id="exspeed"><option value="1">1×</option><option value="0.5">0,5×</option><option value="1.5">1,5×</option><option value="2">2×</option></select></label><label>Qualité<select id="exq"><option value="normal">Normal</option><option value="haute">Haute</option></select></label></div>
 <div class="row" style="margin-top:16px"><button class="btn main" id="ex1" disabled>Exporter la vidéo assemblée</button><button class="btn" id="ex2" disabled>Exporter en clips séparés</button></div><p class="msg" id="exmsg"></p></div></section>
 
 <section id="nettoyage"><h1>Fais de la place</h1><p class="sub">Chaque niveau supprime des fichiers de travail. Tes vidéos sources ne sont pas touchées.</p>
@@ -222,7 +225,7 @@ async function pollJob(){try{const j=await api('/api/job');
  if(j.state==='done')$('exmsg').textContent='Terminé : '+j.files.join(', ');
  else if(j.state==='error')$('exmsg').textContent='Erreur : '+j.error;
  updEx()}catch(e){exBusy=false;$('exmsg').textContent=e.message}}
-async function startEx(kind){try{await api('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:cur,kind:kind,ratio:fm,speed:+$('exspeed').value,quality:$('exq').value,audio:$('exaudio').value,mirror:[...mir].filter(n=>order.includes(n)).sort((a,b)=>a-b)})});exBusy=true;updEx();pollJob()}catch(e){$('exmsg').textContent=e.message}}
+async function startEx(kind){try{await api('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:cur,kind:kind,ratio:fm,speed:+$('exspeed').value,quality:$('exq').value,audio:$('exaudio').value,mirror:[...mir].filter(n=>order.includes(n)).sort((a,b)=>a-b),opts:exOpts(kind)})});exBusy=true;updEx();pollJob()}catch(e){$('exmsg').textContent=e.message}}
 const _lp=loadPlan;loadPlan=async function(n){const p=plans.find(x=>x.name==n)||{};const k=(p.sources||[]).join()+'|'+p.total;if(k!==mirK){mir.clear();mirK=k}return _lp(n)};
 const _d2=drawS;drawS=function(){_d2();const k=[...mir].filter(n=>order.includes(n)).length;$('mircnt').textContent=mir.size?'Miroir : '+mir.size+' scène(s)':'';if(k)$('recap').textContent+=' · miroir '+k};
 $('inv').onclick=()=>{if(!P)return;const k=new Set(order);order=P.scenes.map(s=>s.n).filter(n=>!k.has(n));redraw()};
@@ -243,6 +246,18 @@ $('pv').onclose=()=>{const v=$('pvv');v.pause();v.removeAttribute('src');v.load(
 (()=>{const w=$('wid'),h=document.documentElement;let t='narrow';try{t=localStorage.getItem('mt-width')||'narrow'}catch(e){}
  const ap=x=>x==='wide'?h.setAttribute('data-w','wide'):h.removeAttribute('data-w');w.value=t;ap(t);w.onchange=()=>{ap(w.value);try{localStorage.setItem('mt-width',w.value)}catch(e){}};
  const ds=[...document.querySelectorAll('.top details')];ds.forEach(d=>d.addEventListener('toggle',()=>{if(d.open)ds.forEach(o=>{if(o!==d)o.open=false})}))})();
+function exOpts(kind){const a=$('exaudio').value,o={fit:$('exfit').value||null,background:$('exbg').value,anchor:+$('exan').value,echo:$('exech').checked&&a!=='none'};
+ if(a==='source'||a==='mix')o.audio_db=+$('exadb').value||0;
+ if(a==='music'||a==='mix'){o.music=$('exmus').value;o.music_start=+$('exms').value||0;o.music_db=+$('exmdb').value||0;o.music_fade=$('exmf').value===''?0.3:+$('exmf').value;const s=$('exsnap').checked;o.snap_beats=s&&kind==='video';o.snap_clips=s&&kind==='clips';o.snap_lo=+$('exlo').value||3}
+ if(o.echo){o.echo_ms=+$('exems').value||120;o.echo_decay=$('exedc').value===''?0.3:+$('exedc').value}
+ return o}
+function updSon(){const a=$('exaudio').value,hs=a==='source'||a==='mix',hm=a==='music'||a==='mix',ec=$('exech').checked&&a!=='none',sn=hm&&$('exsnap').checked,f=$('exfit').value;
+ $('sg').hidden=!hs;$('sm').hidden=!hm;$('se').hidden=a==='none';$('sed').hidden=!ec;$('sedd').hidden=!ec;$('slo').hidden=!sn;$('lbg').hidden=!(f===''||f==='bars');$('lan').hidden=f!=='fill';
+ const nm={none:'aucun',source:'audio de la vidéo',music:'musique seule',mix:'vidéo + musique'}[a];
+ $('sorec').textContent='Son : '+nm+(hm?' · '+($('exmus').value||'aucune musique choisie'):'')+(ec?' · écho':'')+(sn?' · calage battements':'')}
+async function loadMusic(){try{const l=await api('/api/music');$('exmus').innerHTML=l.length?l.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join(''):'<option value="">(music/ vide)</option>'}catch(e){}}
+['input','change'].forEach(ev=>$('export').addEventListener(ev,updSon));
+loadMusic().then(updSon);updSon();
 $('ex1').onclick=()=>startEx('video');$('ex2').onclick=()=>startEx('clips');pollJob();updEx();
 const L=[[1,'Niveau 1','Supprime les plans, vignettes et aperçus. Coupe d’abord tes vidéos si tu as besoin des plans.'],[2,'Niveau 2','Ajoute les sorties exportées (dossier output).']];
 $('lvls').innerHTML=L.map(l=>`<div class="lvl"><div><b>${l[1]}</b><p>${l[2]}</p></div><button class="btn bad" data-l="${l[0]}">Nettoyer</button></div>`).join('')+`<div class="lvl"><div><b>Niveau 3</b><p>Vider inbox : supprime les vidéos dans l’Explorateur Windows (dossier en lecture seule ici).</p></div><button class="btn" disabled>Indisponible</button></div>`;

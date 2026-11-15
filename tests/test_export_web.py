@@ -27,7 +27,7 @@ class ServiceTest(unittest.TestCase):
         return webapi.get_job()
 
     def test_validation(self):
-        for bad in ({"kind": "x"}, {"ratio": "4:3"}, {"speed": 3}, {"quality": "?"}, {"audio": "music"}):
+        for bad in ({"kind": "x"}, {"ratio": "4:3"}, {"speed": 3}, {"quality": "?"}, {"audio": "?"}):
             with self.assertRaises(ValueError):
                 webapi.start_export(Path("/nope"), "p.json", **{**OK, **bad})
 
