@@ -238,8 +238,8 @@ async function pollJob(){try{const j=await api('/api/job');
  else if(j.state==='error')$('exmsg').textContent='Erreur : '+j.error;
  updEx()}catch(e){exBusy=false;$('exmsg').textContent=e.message}}
 async function startEx(kind){try{await api('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:cur,kind:kind,ratio:fm,speed:+$('exspeed').value,quality:$('exq').value,audio:$('exaudio').value,mirror:[...mir].filter(n=>order.includes(n)).sort((a,b)=>a-b),opts:exOpts(kind)})});exBusy=true;updEx();pollJob()}catch(e){$('exmsg').textContent=e.message}}
-const _lp=loadPlan;loadPlan=async function(n){const p=plans.find(x=>x.name==n)||{};const k=(p.sources||[]).join()+'|'+p.total;if(k!==mirK){mir.clear();mirK=k}return _lp(n)};
-const _d2=drawS;drawS=function(){_d2();const k=[...mir].filter(n=>order.includes(n)).length;$('mircnt').textContent=mir.size?'Miroir : '+mir.size+' scène(s)':'';if(k)$('recap').textContent+=' · miroir '+k};
+const _lp=loadPlan;loadPlan=async function(n){const p=plans.find(x=>x.name==n)||{};const k=(p.sources||[]).join()+'|'+p.total;if(k!==mirK){mir.clear();mirK=k;try{JSON.parse(localStorage.getItem('mt-mir:'+k)||'[]').forEach(x=>{if(Number.isInteger(x))mir.add(x)})}catch(e){}}return _lp(n)};
+const _d2=drawS;drawS=function(){_d2();try{localStorage.setItem('mt-mir:'+mirK,JSON.stringify([...mir]))}catch(e){}const k=[...mir].filter(n=>order.includes(n)).length;$('mircnt').textContent=mir.size?'Miroir : '+mir.size+' scène(s)':'';if(k)$('recap').textContent+=' · miroir '+k};
 $('inv').onclick=()=>{if(!P)return;const k=new Set(order);order=P.scenes.map(s=>s.n).filter(n=>!k.has(n));redraw()};
 $('mall').onclick=()=>{if(P){P.scenes.forEach(s=>mir.add(s.n));redraw()}};
 $('mnone').onclick=()=>{mir.clear();redraw()};
