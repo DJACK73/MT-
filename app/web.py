@@ -131,6 +131,16 @@ async def export(request: Request) -> Response:
                        body.get("opts"))
 
 
+async def compose(request: Request) -> Response:
+    try:
+        body = await request.json()
+    except ValueError:
+        return _err(400, "JSON invalide")
+    if not isinstance(body, dict):
+        return _err(400, "objet attendu")
+    return await _call(webapi.compose, ROOT, body.get("items"))
+
+
 async def job(request: Request) -> Response:
     return _Json(webapi.get_job())
 
@@ -206,5 +216,6 @@ app = Starlette(routes=[
     Route("/api/cut", cut, methods=["POST"]),
     Route("/api/export", export, methods=["POST"]),
     Route("/api/job", job),
+    Route("/api/compose", compose, methods=["POST"]),
     Route("/api/clean/{level:int}", clean, methods=["GET", "POST"]),
 ])

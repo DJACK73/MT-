@@ -13,6 +13,7 @@ from .compose import letter
 from .fit import window_flag
 from .models import Options, Plan
 from .paths import ensure_outside_inbox
+from .compose import compose_plan
 from .selection import select_scenes
 from .thumbs import make_thumbnails
 
@@ -185,6 +186,24 @@ def run_cut(root: Path, name: str, threshold: float, min_s: float, max_s: float 
     d = ensure_outside_inbox(_dir(root), root)
     d.mkdir(parents=True, exist_ok=True)
     return {"name": save_plan(plan, d).name, "reused": False, "scenes": len(plan.scenes)}
+
+
+def compose(root: Path, items) -> dict:
+    if not isinstance(items, list) or not 1 <= len(items) <= 500:
+        raise ValueError("items: liste de 1 à 500 scènes attendue")
+    names: list[str] = []
+    order: list[tuple[int, int]] = []
+    for it in items:
+        if (not isinstance(it, dict) or not isinstance(it.get("plan"), str)
+                or isinstance(it.get("n"), bool) or not isinstance(it.get("n"), int)):
+            raise ValueError("item invalide: {plan, n} attendu")
+        if it["plan"] not in names:
+            names.append(it["plan"])
+        order.append((names.index(it["plan"]), it["n"]))
+    plan = compose_plan([_load(root, n) for n in names], order)
+    d = ensure_outside_inbox(_dir(root), root)
+    d.mkdir(parents=True, exist_ok=True)
+    return {"name": save_plan(plan, d).name}
 
 
 _JOB: dict = {"state": "idle"}
