@@ -9,6 +9,7 @@ from pathlib import Path
 from .approval import PlanError, approve, is_approved, plan_id, save_plan
 from .avtools import extract_audio, remove_audio, stack_videos
 from .cmd import scan_video
+from .manual import manual_plan
 from .compose import letter
 from .fit import window_flag
 from .models import Options, Plan
@@ -188,6 +189,71 @@ def run_cut(root: Path, name: str, threshold: float, min_s: float, max_s: float 
     return {"name": save_plan(plan, d).name, "reused": False, "scenes": len(plan.scenes)}
 
 
+def _cut_other(root: Path, name: str, mode: str, spans: str) -> dict:
+    src = _vdir(root) / name
+    if Path(name).name != name or src.suffix.lower() not in _VIDEO_EXT or not src.is_file():
+        raise ValueError(f"vidéo invalide: {name}")
+    if mode == "manual" and not spans.strip():
+        raise ValueError("plages vides")
+    plan = manual_plan(src, root, spans if mode == "manual" else None)
+    d = ensure_outside_inbox(_dir(root), root)
+    d.mkdir(parents=True, exist_ok=True)
+    before = {p.name for p, _ in _plans(root)}
+    got = _save_or_open(plan, d).name
+    return {"name": got, "reused": got in before, "scenes": len(plan.scenes)}
+
+
+def _isn(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
+def get_cutjob() -> dict:
+    with _LOCK:
+        return dict(_CJOB)
+
+
+def start_cut(root: Path, names, mode, threshold, min_s, max_s, framing, spans) -> dict:
+    if not isinstance(names, list) or not 1 <= len(names) <= 50 or not all(isinstance(n, str) for n in names):
+        raise ValueError("names: liste de 1 à 50 vidéos attendue")
+    if mode not in ("auto", "manual", "whole"):
+        raise ValueError(f"mode inconnu: {mode}")
+    if not isinstance(spans, str):
+        raise ValueError("spans: texte attendu")
+    if mode == "manual" and (len(names) != 1 or not spans.strip()):
+        raise ValueError("manuel: une seule vidéo et des plages attendues")
+    if mode == "auto" and (not _isn(threshold) or not _isn(min_s) or not (max_s is None or _isn(max_s))
+                           or not isinstance(framing, str)):
+        raise ValueError("auto: threshold, min, max (ou null) et framing attendus")
+    with _LOCK:
+        if _CJOB.get("state") == "running":
+            raise PlanError("une découpe est déjà en cours")
+        if _JOB.get("state") == "running":
+            raise PlanError("un export est en cours : attends sa fin")
+        _CJOB.clear()
+        _CJOB.update(state="running", done=0, total=len(names), current=names[0])
+
+    def work() -> None:
+        res: list = []
+        errs: list = []
+        last = ""
+        for k, n in enumerate(names):
+            with _LOCK:
+                _CJOB.update(done=k, current=n)
+            try:
+                r = (run_cut(root, n, threshold, min_s, max_s, framing) if mode == "auto"
+                     else _cut_other(root, n, mode, spans))
+                res.append({"video": n, **r})
+                last = r["name"]
+            except Exception as e:
+                errs.append(f"{n}: {e}")
+        with _LOCK:
+            _CJOB.clear()
+            _CJOB.update(state="done", done=len(names), total=len(names), results=res, errors=errs, last=last)
+
+    threading.Thread(target=work, daemon=True).start()
+    return {"started": True}
+
+
 def compose(root: Path, items) -> dict:
     if not isinstance(items, list) or not 1 <= len(items) <= 500:
         raise ValueError("items: liste de 1 à 500 scènes attendue")
@@ -207,6 +273,7 @@ def compose(root: Path, items) -> dict:
 
 
 _JOB: dict = {"state": "idle"}
+_CJOB: dict = {"state": "idle"}
 _LOCK = threading.Lock()
 _THREAD: threading.Thread | None = None
 _QUALITY = {"normal": 20, "haute": 16}

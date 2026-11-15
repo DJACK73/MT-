@@ -80,16 +80,18 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 </head>
 <body>
 <div class="wrap">
-<header class="top"><b>🎬 MT · Montage</b><div style="display:flex;gap:10px;align-items:center"><details class="guide menu" style="order:1"><summary aria-label="Réglages">⋮</summary><div class="gbody"><label>Thème<select id="theme"><option value="auto">Auto</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label><label>Largeur<select id="wid"><option value="narrow">Étroite</option><option value="wide">Large</option></select></label></div></details><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), outils son et collage (⑤), nettoyage (⑥).</p><p>③ : Sélection (cases, ▶ voir, miroir, Inverser) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de inbox/musique/ (une vidéo placée là est convertie en audio) ; le calage sur les battements est une option décochée.</p><p>Dossiers : vidéos dans inbox/videos/, musique dans inbox/musique/. ② : choisis des scènes de plusieurs vidéos coupées, ordonne-les (↑ ↓ ✕), « Créer le plan composé » ; en ③ chaque scène d’un plan composé affiche la lettre de sa vidéo d’origine.</p></div></details></div></header>
+<header class="top"><b>🎬 MT · Montage</b><div style="display:flex;gap:10px;align-items:center"><details class="guide menu" style="order:1"><summary aria-label="Réglages">⋮</summary><div class="gbody"><label>Thème<select id="theme"><option value="auto">Auto</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label><label>Largeur<select id="wid"><option value="narrow">Étroite</option><option value="wide">Large</option></select></label></div></details><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), outils son et collage (⑤), nettoyage (⑥).</p><p>③ : Sélection (cases, ▶ voir, miroir, Inverser) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de inbox/musique/ (une vidéo placée là est convertie en audio) ; le calage sur les battements est une option décochée.</p><p>① : Auto (scènes), Manuel (plages début-fin) ou Aucune (vidéo entière) ; la découpe tourne en tâche de fond.</p><p>Dossiers : vidéos dans inbox/videos/, musique dans inbox/musique/. ② : choisis des scènes de plusieurs vidéos coupées, ordonne-les (↑ ↓ ✕), « Créer le plan composé » ; en ③ chaque scène d’un plan composé affiche la lettre de sa vidéo d’origine.</p></div></details></div></header>
 <nav id="nav" aria-label="Étapes"></nav>
 
 <section id="decouper"><h1>Découpe tes vidéos</h1><p class="sub">Rien n’est coché au départ. Une vidéo déjà coupée avec les mêmes options se rouvre sans redécoupe.</p>
 <div class="box" id="vids"></div>
-<div class="box"><h2>Options</h2><div class="row">
+<div class="box"><h2>Mode</h2><div class="row"><label>Découpe<select id="cutmode"><option value="auto">Auto (scènes)</option><option value="manual">Manuel (plages)</option><option value="whole">Aucune (vidéo entière)</option></select></label></div></div>
+<div class="box" id="cutauto"><h2>Options</h2><div class="row">
 <label>Sensibilité<input id="cutth" type="number" value="0.35" step="0.05" style="width:90px"></label>
 <label>Min (s)<input id="cutmin" type="number" value="3" style="width:80px"></label>
 <label>Max (s)<input id="cutmax" type="number" value="5" style="width:80px"></label>
 <label>Cadrage<select id="cutfit"><option value="blur_pad">Bandes floues</option><option value="crop_center">Recadré au centre</option></select></label></div></div>
+<div class="box" id="cutman" hidden><h2>Plages</h2><textarea id="cutspans" rows="5" style="width:100%" placeholder="12.5-16&#10;1:02-1:08.5&#10;40-fin"></textarea><p class="sub">Une plage par ligne : début-fin (secondes ou m:ss). L’ordre saisi est conservé.</p></div>
 <button class="btn main" id="cut">Découper la sélection</button><p class="msg" id="cutmsg"></p></section>
 
 <section id="outils"><h1>Outils</h1><p class="sub">Vidéos de inbox/. Les fichiers créés vont dans output/, sans jamais écraser.</p>
@@ -201,16 +203,22 @@ $('apply').onclick=async()=>{
 $('appr').onclick=async()=>{
  try{const r=await api('/api/plan/'+enc(cur)+'/approve',{method:'POST'});
   await loadPlans((r&&r.name)||cur);msg('Plan approuvé.')}catch(e){msg(e.message)}};
-$('cut').onclick=async()=>{const k=[...picked];if(!k.length){$('cutmsg').textContent='Coche au moins une vidéo.';return}
- const b=$('cut');b.disabled=true;let ok=0,re=0,last='';
- try{for(const [j,i] of k.entries()){$('cutmsg').textContent='Découpe '+(j+1)+'/'+k.length+' : '+V[i].n+' (plusieurs minutes pour une longue vidéo)…';
-  const mx=$('cutmax').value;
-  const r=await api('/api/cut',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:V[i].n,threshold:+$('cutth').value,min:+$('cutmin').value,max:mx===''?null:+mx,framing:$('cutfit').value})});
-  r.reused?re++:ok++;last=r.name}
-  $('cutmsg').textContent=ok+' découpée(s), '+re+' rouverte(s) sans redécoupe.';picked.clear()}
- catch(e){$('cutmsg').textContent=e.message}
- b.disabled=false;await loadVideos();
- if(last&&typeof loadPlans==='function'){try{await loadPlans(last)}catch(e){}}};
+function cutMode(){const m=$('cutmode').value;$('cutauto').hidden=m!=='auto';$('cutman').hidden=m!=='manual';$('cut').textContent={auto:'Découper la sélection',manual:'Créer le plan',whole:'Garder la vidéo entière'}[m]}
+$('cutmode').onchange=cutMode;cutMode();
+let cutT=null;
+$('cut').onclick=async()=>{const k=[...picked].map(i=>V[i].n);if(!k.length){$('cutmsg').textContent='Coche au moins une vidéo.';return}
+ const m=$('cutmode').value;if(m==='manual'&&k.length!==1){$('cutmsg').textContent='Manuel : coche une seule vidéo.';return}
+ const mx=$('cutmax').value;
+ try{await api('/api/cutjob',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({names:k,mode:m,threshold:+$('cutth').value,min:+$('cutmin').value,max:mx===''?null:+mx,framing:$('cutfit').value,spans:$('cutspans').value})})}
+ catch(e){$('cutmsg').textContent=e.message;return}
+ $('cut').disabled=true;$('cutmsg').textContent='Découpe en cours…';pollCut()};
+async function pollCut(){clearTimeout(cutT);let j;
+ try{j=await api('/api/cutjob')}catch(e){$('cutmsg').textContent=e.message;$('cut').disabled=false;return}
+ if(j.state==='running'){$('cutmsg').textContent='Découpe '+(j.done+1)+'/'+j.total+' : '+j.current+'…';cutT=setTimeout(pollCut,1500);return}
+ $('cut').disabled=false;
+ if(j.state==='done'){const re=j.results.filter(r=>r.reused).length,ok=j.results.length-re;
+  $('cutmsg').textContent=ok+' plan(s) créé(s), '+re+' rouvert(s)'+(j.errors.length?' · erreurs : '+j.errors.join(' ; '):'')+'.';picked.clear();
+  await loadVideos();if(j.last&&typeof loadPlans==='function'){try{await loadPlans(j.last)}catch(e){}}}}
 $('goSel').onclick=()=>location.hash='#selection';
 (()=>{const s=$('theme'),r=document.documentElement;let t='auto';try{t=localStorage.getItem('mt-theme')||'auto'}catch(e){}
  const ap=v=>v==='auto'?r.removeAttribute('data-theme'):r.setAttribute('data-theme',v);

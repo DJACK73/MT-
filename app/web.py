@@ -145,6 +145,19 @@ async def job(request: Request) -> Response:
     return _Json(webapi.get_job())
 
 
+async def cutjob(request: Request) -> Response:
+    if request.method == "GET":
+        return _Json(webapi.get_cutjob())
+    try:
+        body = await request.json()
+    except ValueError:
+        return _err(400, "JSON invalide")
+    if not isinstance(body, dict):
+        return _err(400, "objet JSON attendu")
+    return await _call(webapi.start_cut, ROOT, body.get("names"), body.get("mode", "auto"), body.get("threshold"),
+                       body.get("min"), body.get("max"), body.get("framing", "blur_pad"), body.get("spans", ""))
+
+
 async def clean(request: Request) -> Response:
     level = request.path_params["level"]
     if request.method == "GET":
@@ -216,6 +229,7 @@ app = Starlette(routes=[
     Route("/api/cut", cut, methods=["POST"]),
     Route("/api/export", export, methods=["POST"]),
     Route("/api/job", job),
+    Route("/api/cutjob", cutjob, methods=["GET", "POST"]),
     Route("/api/compose", compose, methods=["POST"]),
     Route("/api/clean/{level:int}", clean, methods=["GET", "POST"]),
 ])
