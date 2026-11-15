@@ -64,11 +64,19 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 .guide summary::-webkit-details-marker{display:none}
 .gbody{position:absolute;right:0;top:46px;z-index:5;width:min(560px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .gbody p{margin:0 0 8px;color:var(--mute);font-size:14px}.gbody p:last-child{margin:0}
+.cw{display:flex;flex-direction:column;gap:6px;min-width:0}
+.cb{display:flex;gap:6px}.cb .btn{flex:1;padding:6px 8px;font-size:13px}
+.cw .thumb{position:relative}
+.mir{position:absolute;left:6px;top:6px;background:var(--sel);color:var(--on);border-radius:6px;padding:1px 6px;font-size:13px}
+#pv{max-width:min(420px,94vw)}#pv video{display:block;max-height:60vh;max-width:100%;margin:0 auto;border-radius:8px;background:#000}
+.menu .gbody{width:min(280px,92vw)}.menu .gbody label{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;color:var(--mute);font-size:14px}
+[data-w=wide] .wrap{max-width:1200px}
+.card.fl img{transform:scaleX(-1)}
 </style>
 </head>
 <body>
 <div class="wrap">
-<header class="top"><b>🎬 MT · Montage</b><div style="display:flex;gap:10px;align-items:center"><select id="theme" aria-label="Thème"><option value="auto">Thème : auto</option><option value="light">Thème : clair</option><option value="dark">Thème : sombre</option></select><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), nettoyage (⑥).</p><p>③ : Sélection (cases) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.</p></div></details></div></header>
+<header class="top"><b>🎬 MT · Montage</b><div style="display:flex;gap:10px;align-items:center"><details class="guide menu" style="order:1"><summary aria-label="Réglages">⋮</summary><div class="gbody"><label>Thème<select id="theme"><option value="auto">Auto</option><option value="light">Clair</option><option value="dark">Sombre</option></select></label><label>Largeur<select id="wid"><option value="narrow">Étroite</option><option value="wide">Large</option></select></label></div></details><details class="guide"><summary>ℹ Guide</summary><div class="gbody"><p>① Découper → ② Composer (plusieurs vidéos, facultatif) → ③ Sélection → ④ Export : coche les scènes, « Appliquer la sélection », « Approuver » (③), puis réglages et export (④), outils son et collage (⑤), nettoyage (⑥).</p><p>③ : Sélection (cases, ▶ voir, miroir, Inverser) → Actions (appliquer, approuver). ④ : Réglages (cadrage, son) → Export (vitesse, qualité, exports).</p><p>Son : « Sans audio » par défaut. « Musique ajoutée » : un fichier de music/ ; le calage sur les battements est une option décochée.</p></div></details></div></header>
 <nav id="nav" aria-label="Étapes"></nav>
 
 <section id="decouper"><h1>Découpe tes vidéos</h1><p class="sub">Rien n’est coché au départ. Une vidéo déjà coupée avec les mêmes options se rouvre sans redécoupe.</p>
@@ -80,7 +88,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <label>Cadrage<select id="cutfit"><option value="blur_pad">Bandes floues</option><option value="crop_center">Recadré au centre</option></select></label></div></div>
 <button class="btn main" id="cut">Découper la sélection</button><p class="msg" id="cutmsg"></p></section>
 
-<section id="outils"><h1>Outils son</h1><p class="sub">Vidéos de inbox/. Les fichiers créés vont dans output/, sans jamais écraser.</p>
+<section id="outils"><h1>Outils</h1><p class="sub">Vidéos de inbox/. Les fichiers créés vont dans output/, sans jamais écraser.</p>
 <div class="box" id="tl"></div>
 <div class="box"><h2>Coller 2 à 4 vidéos</h2><div class="row"><label>Vidéo A<select id="sa"></select></label><label>Vidéo B<select id="sb"></select></label><label>Vidéo C<select id="sc"></select></label><label>Vidéo D<select id="sd"></select></label><label>Disposition<select id="sm"><option value="cote">Côte à côte</option><option value="dessus">L’une au-dessus de l’autre</option><option value="bout">Bout à bout</option><option value="incrust">Incrustation</option><option value="grille">Grille 2×2 (3-4 vidéos)</option></select></label><label>Cadrage<select id="sf"><option value="ajuster">Ajuster (barres noires)</option><option value="remplir">Remplir (recadrer)</option></select></label></div><div class="row" style="margin-top:14px"><button class="btn main" id="stk">Coller</button></div></div>
 <p class="msg" id="tmsg"></p></section>
@@ -93,7 +101,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <div class="row" style="margin-bottom:16px"><label>Plan<select id="plansel" style="max-width:100%"></select></label></div>
 <div class="total"><b id="tot">0 s</b><span id="cnt" class="sub" style="margin:0"></span><span class="tag" id="st"></span></div>
 <div class="strip" id="strip" role="group" aria-label="Frise des scènes"></div>
-<div class="row" style="margin:18px 0 8px"><button class="btn main" id="all">Tout cocher</button><button class="btn" id="none">Tout décocher</button><button class="btn" id="rev">Renverser l’ordre</button></div>
+<div class="row" style="margin:18px 0 8px"><button class="btn main" id="all">Tout cocher</button><button class="btn" id="none">Tout décocher</button><button class="btn" id="rev">Renverser l’ordre</button><button class="btn" id="inv">Inverser</button><button class="btn" id="mall">Miroir : toutes</button><button class="btn" id="mnone">Miroir : aucune</button><span id="mircnt" class="sub" style="margin:0"></span><label>Numéros<input id="nums" placeholder="5,2,3" style="width:110px"></label><button class="btn" id="numok">OK</button></div>
 <div class="row" style="margin:0 0 22px"><button class="btn main" id="apply" disabled>Appliquer la sélection</button><button class="btn" id="appr" disabled>Approuver</button></div>
 <p class="msg" id="selmsg"></p>
 <div class="grid" id="grid"></div></section>
@@ -109,6 +117,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <div class="box" id="lvls"></div><p class="msg" id="clmsg"></p></section>
 </div>
 
+<dialog id="pv"><h2 id="pvt"></h2><video id="pvv" playsinline controls loop muted></video><div class="row" style="margin-top:12px"><label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="pvk"> Garder</label><label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="pvm"> Miroir</label></div><div class="row"><button class="btn" id="pvp">◀ Précédente</button><button class="btn" id="pvn">Suivante ▶</button><button class="btn main" id="pvx">Fermer</button></div></dialog>
 <dialog id="dlg"><h2>Confirmer le nettoyage</h2><p id="dtxt"></p><div class="row"><button class="btn bad" id="dok">Confirmer</button><button class="btn" id="dno">Annuler</button></div></dialog>
 
 <script>
@@ -150,9 +159,13 @@ function drawS(){
  $('strip').innerHTML='';$('grid').innerHTML='';
  S.forEach(s=>{const r=order.indexOf(s.n)+1,on=r>0,fl=s.flag?(s.flag===true?'noire':String(s.flag)):'';
   const b=document.createElement('button');b.className='seg'+(on?' on':'');b.style.flex=Math.max(dur(s),.2)+' 1 0';b.textContent=on?r:'';b.title='Scène '+s.n;b.setAttribute('aria-pressed',on);b.onclick=()=>tg(s.n);$('strip').append(b);
-  const c=document.createElement('button');c.className='card'+(on?' on':'');c.setAttribute('aria-pressed',on);
-  c.innerHTML=`<div class="thumb"><img data-src="/api/plan/${enc(cur)}/thumb/${s.n}" alt=""><span class="rank">${r||''}</span>${fl?`<span class="badge">${esc(fl)}</span>`:''}</div><div class="meta"><span>Scène ${s.n}</span><span>${fmt(dur(s))} s</span></div>`;
-  c.onclick=()=>tg(s.n);$('grid').append(c);});
+  const c=document.createElement('button');c.className='card'+(on?' on':'')+(mir.has(s.n)?' fl':'');c.setAttribute('aria-pressed',on);
+  c.innerHTML=`<div class="thumb"><img data-src="/api/plan/${enc(cur)}/thumb/${s.n}" alt=""><span class="rank">${r||''}</span>${mir.has(s.n)?'<span class="mir" title="Miroir">⇋</span>':''}${fl?`<span class="badge">${esc(fl)}</span>`:''}</div><div class="meta"><span>Scène ${s.n}</span><span>${fmt(dur(s))} s</span></div>`;
+  c.onclick=()=>tg(s.n);
+  const w=document.createElement('div');w.className='cw';const t=document.createElement('div');t.className='cb';
+  const v=document.createElement('button');v.className='btn';v.textContent='▶ voir';v.onclick=()=>pvShow(s.n);
+  const m=document.createElement('button');m.className='btn'+(mir.has(s.n)?' on':'');m.textContent='⇋ miroir';m.setAttribute('aria-pressed',mir.has(s.n));m.onclick=()=>{mir.has(s.n)?mir.delete(s.n):mir.add(s.n);redraw()};
+  t.append(v,m);w.append(c,t);$('grid').append(w);});
 }
 function tg(n){const i=order.indexOf(n);i<0?order.push(n):order.splice(i,1);redraw()}
 function redraw(){const y=scrollY;drawS();loadThumbs();scrollTo(0,y)}
@@ -198,7 +211,7 @@ $('goSel').onclick=()=>location.hash='#selection';
  s.value=t;ap(t);s.onchange=()=>{ap(s.value);try{localStorage.setItem('mt-theme',s.value)}catch(e){}}})();
 $('fmt').innerHTML=['9:16','16:9','1:1'].map(f=>`<button class="btn ${f==fm?'on':''}" data-f="${f}">${f}</button>`).join('');
 $('fmt').onclick=e=>{const f=e.target.dataset.f;if(!f)return;fm=f;$('fmt').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.f==f));drawS()};
-let exBusy=false,exT=null;
+let exBusy=false,exT=null;const mir=new Set();let mirK='';
 function updEx(){const ok=!!P&&!!P.approved&&same(order,saved)&&order.length>0&&!exBusy;
  $('ex1').disabled=!ok;$('ex2').disabled=!ok;
  if(!exBusy&&!ok)$('exmsg').textContent=P?'Approuve d’abord la sélection en ③.':'Aucun plan : coupe une vidéo en ①.'}
@@ -209,7 +222,27 @@ async function pollJob(){try{const j=await api('/api/job');
  if(j.state==='done')$('exmsg').textContent='Terminé : '+j.files.join(', ');
  else if(j.state==='error')$('exmsg').textContent='Erreur : '+j.error;
  updEx()}catch(e){exBusy=false;$('exmsg').textContent=e.message}}
-async function startEx(kind){try{await api('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:cur,kind:kind,ratio:fm,speed:+$('exspeed').value,quality:$('exq').value,audio:$('exaudio').value})});exBusy=true;updEx();pollJob()}catch(e){$('exmsg').textContent=e.message}}
+async function startEx(kind){try{await api('/api/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:cur,kind:kind,ratio:fm,speed:+$('exspeed').value,quality:$('exq').value,audio:$('exaudio').value,mirror:[...mir].filter(n=>order.includes(n)).sort((a,b)=>a-b)})});exBusy=true;updEx();pollJob()}catch(e){$('exmsg').textContent=e.message}}
+const _lp=loadPlan;loadPlan=async function(n){const p=plans.find(x=>x.name==n)||{};const k=(p.sources||[]).join()+'|'+p.total;if(k!==mirK){mir.clear();mirK=k}return _lp(n)};
+const _d2=drawS;drawS=function(){_d2();const k=[...mir].filter(n=>order.includes(n)).length;$('mircnt').textContent=mir.size?'Miroir : '+mir.size+' scène(s)':'';if(k)$('recap').textContent+=' · miroir '+k};
+$('inv').onclick=()=>{if(!P)return;const k=new Set(order);order=P.scenes.map(s=>s.n).filter(n=>!k.has(n));redraw()};
+$('mall').onclick=()=>{if(P){P.scenes.forEach(s=>mir.add(s.n));redraw()}};
+$('mnone').onclick=()=>{mir.clear();redraw()};
+$('numok').onclick=()=>{if(!P)return;const ok=new Set(P.scenes.map(s=>s.n)),l=[];for(const t of $('nums').value.split(/[^0-9]+/)){const n=+t;if(t&&ok.has(n)&&!l.includes(n))l.push(n)}if(!l.length){msg('Aucun numéro valide.');return}order=l;redraw()};
+let pvN=0,pvL=false;
+function pvShow(n){if(!P)return;const ids=P.scenes.map(x=>x.n),i=ids.indexOf(n);if(i<0)return;pvN=n;pvL=mir.has(n);const v=$('pvv');v.style.transform='';
+ v.src='/api/plan/'+enc(cur)+'/preview/'+n+'?mirror='+(mir.has(n)?1:0)+'&speed='+(+$('exspeed').value||1);
+ $('pvt').textContent='Scène '+n+' · '+fmt(dur(P.scenes[i]))+' s';$('pvk').checked=order.includes(n);$('pvm').checked=mir.has(n);
+ $('pvp').disabled=i<=0;$('pvn').disabled=i>=ids.length-1;if(!$('pv').open)$('pv').showModal();v.play().catch(()=>{})}
+$('pvp').onclick=()=>{const i=P.scenes.findIndex(x=>x.n===pvN);if(i>0)pvShow(P.scenes[i-1].n)};
+$('pvn').onclick=()=>{const i=P.scenes.findIndex(x=>x.n===pvN);if(i>=0&&i<P.scenes.length-1)pvShow(P.scenes[i+1].n)};
+$('pvk').onchange=()=>{tg(pvN);$('pvk').checked=order.includes(pvN)};
+$('pvm').onchange=()=>{const v=$('pvv'),t=v.currentTime,p=v.paused;mir.has(pvN)?mir.delete(pvN):mir.add(pvN);redraw();v.style.transform=mir.has(pvN)!==pvL?'scaleX(-1)':'';if(Math.abs(v.currentTime-t)>.3)v.currentTime=t;p?v.pause():v.play().catch(()=>{})};
+$('pvx').onclick=()=>$('pv').close();
+$('pv').onclose=()=>{const v=$('pvv');v.pause();v.removeAttribute('src');v.load()};
+(()=>{const w=$('wid'),h=document.documentElement;let t='narrow';try{t=localStorage.getItem('mt-width')||'narrow'}catch(e){}
+ const ap=x=>x==='wide'?h.setAttribute('data-w','wide'):h.removeAttribute('data-w');w.value=t;ap(t);w.onchange=()=>{ap(w.value);try{localStorage.setItem('mt-width',w.value)}catch(e){}};
+ const ds=[...document.querySelectorAll('.top details')];ds.forEach(d=>d.addEventListener('toggle',()=>{if(d.open)ds.forEach(o=>{if(o!==d)o.open=false})}))})();
 $('ex1').onclick=()=>startEx('video');$('ex2').onclick=()=>startEx('clips');pollJob();updEx();
 const L=[[1,'Niveau 1','Supprime les plans, vignettes et aperçus. Coupe d’abord tes vidéos si tu as besoin des plans.'],[2,'Niveau 2','Ajoute les sorties exportées (dossier output).']];
 $('lvls').innerHTML=L.map(l=>`<div class="lvl"><div><b>${l[1]}</b><p>${l[2]}</p></div><button class="btn bad" data-l="${l[0]}">Nettoyer</button></div>`).join('')+`<div class="lvl"><div><b>Niveau 3</b><p>Vider inbox : supprime les vidéos dans l’Explorateur Windows (dossier en lecture seule ici).</p></div><button class="btn" disabled>Indisponible</button></div>`;
