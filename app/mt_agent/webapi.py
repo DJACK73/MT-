@@ -99,8 +99,13 @@ _VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"}  # = dashboard.VI
 _TOOLS = {"audio": (extract_audio, ".m4a"), "muet": (remove_audio, "-muet.mp4")}
 
 
+def _vdir(root: Path) -> Path:
+    d = root / "inbox" / "videos"
+    return d if d.is_dir() else root / "inbox"
+
+
 def list_inbox(root: Path) -> list[str]:
-    d = root / "inbox"
+    d = _vdir(root)
     if not d.is_dir():
         return []
     return sorted(x.name for x in d.iterdir() if x.is_file() and x.suffix.lower() in _VIDEO_EXT)
@@ -109,7 +114,7 @@ def list_inbox(root: Path) -> list[str]:
 def run_tool(root: Path, name: str, tool: str) -> dict:
     if tool not in _TOOLS:
         raise ValueError(f"outil inconnu: {tool}")
-    src = root / "inbox" / name
+    src = _vdir(root) / name
     if Path(name).name != name or src.suffix.lower() not in _VIDEO_EXT or not src.is_file():
         raise ValueError(f"vidéo invalide: {name}")
     fn, tail = _TOOLS[tool]
@@ -130,7 +135,7 @@ def run_stack(root: Path, names: list[str], mode: str, fit: str = "ajuster") -> 
     for n in names:
         if not isinstance(n, str):
             raise ValueError(f"vidéo invalide: {n}")
-        s = root / "inbox" / n
+        s = _vdir(root) / n
         if Path(n).name != n or s.suffix.lower() not in _VIDEO_EXT or not s.is_file():
             raise ValueError(f"vidéo invalide: {n}")
         srcs.append(s)
@@ -163,7 +168,7 @@ def list_videos(root: Path) -> list[dict]:
 
 def run_cut(root: Path, name: str, threshold: float, min_s: float, max_s: float | None,
             framing: str = "blur_pad") -> dict:
-    src = root / "inbox" / name
+    src = _vdir(root) / name
     if Path(name).name != name or src.suffix.lower() not in _VIDEO_EXT or not src.is_file():
         raise ValueError(f"vidéo invalide: {name}")
     if max_s is not None and max_s < min_s:
@@ -189,11 +194,29 @@ _QUALITY = {"normal": 20, "haute": 16}
 _AUDIO_EXT = {".m4a", ".mp3", ".wav", ".ogg", ".flac", ".aac"}
 
 
+def _mdir(root: Path) -> Path:
+    d = root / "inbox" / "musique"
+    return d if d.is_dir() else root / "music"
+
+
 def list_music(root: Path) -> list:
-    d = root / "music"
+    d = _mdir(root)
     if not d.is_dir():
         return []
-    return sorted(p.name for p in d.iterdir() if p.is_file() and p.suffix.lower() in _AUDIO_EXT)
+    return sorted(p.name for p in d.iterdir() if p.is_file() and p.suffix.lower() in (_AUDIO_EXT | _VIDEO_EXT))
+
+
+def _music_file(root: Path, m: str) -> str:
+    """Chemin (relatif à la racine) de la musique ; une vidéo est convertie en audio (cache, jamais écrasé)."""
+    p = _mdir(root) / m
+    if p.suffix.lower() not in _VIDEO_EXT:
+        return p.relative_to(root).as_posix()
+    o = root / "workspace" / "previews" / "musique" / f"{p.stem}-{p.stat().st_size}.m4a"
+    ensure_outside_inbox(o, root)
+    if not o.exists():
+        o.parent.mkdir(parents=True, exist_ok=True)
+        extract_audio(p, o)
+    return o.relative_to(root).as_posix()
 
 
 def _num(o: dict, k: str, d: float, lo: float, hi: float) -> float:
@@ -223,8 +246,8 @@ def _look(root: Path, ratio: str, speed: float, audio: str, mir: frozenset, o: d
     if audio in ("music", "mix"):
         m = o.get("music")
         if not isinstance(m, str) or m not in list_music(root):
-            raise ValueError("musique: choisis un fichier de music/")
-        music = "music/" + m
+            raise ValueError("musique: choisis un fichier de inbox/musique/")
+        music = _music_file(root, m)
     echo = _flag(o, "echo")
     if echo and audio == "none":
         raise ValueError("écho: choisis un son")

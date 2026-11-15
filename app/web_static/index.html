@@ -255,7 +255,7 @@ function updSon(){const a=$('exaudio').value,hs=a==='source'||a==='mix',hm=a==='
  $('sg').hidden=!hs;$('sm').hidden=!hm;$('se').hidden=a==='none';$('sed').hidden=!ec;$('sedd').hidden=!ec;$('slo').hidden=!sn;$('lbg').hidden=!(f===''||f==='bars');$('lan').hidden=f!=='fill';
  const nm={none:'aucun',source:'audio de la vidéo',music:'musique seule',mix:'vidéo + musique'}[a];
  $('sorec').textContent='Son : '+nm+(hm?' · '+($('exmus').value||'aucune musique choisie'):'')+(ec?' · écho':'')+(sn?' · calage battements':'')}
-async function loadMusic(){try{const l=await api('/api/music');$('exmus').innerHTML=l.length?l.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join(''):'<option value="">(music/ vide)</option>'}catch(e){}}
+async function loadMusic(){try{const l=await api('/api/music');$('exmus').innerHTML=l.length?l.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join(''):'<option value="">(inbox/musique/ vide)</option>'}catch(e){}}
 ['input','change'].forEach(ev=>$('export').addEventListener(ev,updSon));
 loadMusic().then(updSon);updSon();
 $('ex1').onclick=()=>startEx('video');$('ex2').onclick=()=>startEx('clips');pollJob();updEx();
