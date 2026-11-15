@@ -16,6 +16,7 @@ from starlette.routing import Route
 
 STATIC = Path(__file__).parent / "web_static"
 THUMBS = (ROOT / "workspace" / "thumbs").resolve()
+PREVIEWS = (ROOT / "workspace" / "previews").resolve()
 PLACEHOLDER = "<!doctype html><meta charset=utf-8><title>MT</title><p>MT web : page a venir."
 
 
@@ -122,7 +123,7 @@ async def export(request: Request) -> Response:
         return _err(400, "name attendu")
     return await _call(webapi.start_export, ROOT, body["name"], body.get("kind"),
                        body.get("ratio", "9:16"), body.get("speed", 1),
-                       body.get("quality", "normal"), body.get("audio", "none"))
+                       body.get("quality", "normal"), body.get("audio", "none"), body.get("mirror", []))
 
 
 async def job(request: Request) -> Response:
@@ -141,6 +142,28 @@ async def clean(request: Request) -> Response:
     if isinstance(c, bool) or c != level:
         return _err(400, "confirmation requise : confirm = niveau")
     return await _call(webapi.do_clean, ROOT, level)
+
+
+async def preview(request: Request) -> Response:
+    n = request.path_params["n"]
+    if n < 1:
+        return _err(400, "n >= 1")
+    q = request.query_params
+    try:
+        speed = float(q.get("speed", "1"))
+    except ValueError:
+        return _err(400, "vitesse invalide")
+    try:
+        p = await run_in_threadpool(webapi.preview, ROOT, request.path_params["name"], n,
+                                    q.get("mirror") == "1", speed)
+    except (PlanError, MediaError, ValueError) as e:
+        return _err(400, str(e))
+    except FileNotFoundError as e:
+        return _err(404, str(e))
+    p = Path(p).resolve()
+    if not p.is_file() or not p.is_relative_to(PREVIEWS):
+        return _err(404, "aperçu indisponible")
+    return FileResponse(p, media_type="video/mp4")
 
 
 def _num(x: Any) -> bool:
@@ -169,6 +192,7 @@ app = Starlette(routes=[
     Route("/api/plan/{name}/select", select, methods=["POST"]),
     Route("/api/plan/{name}/approve", approve, methods=["POST"]),
     Route("/api/plan/{name}/thumb/{n:int}", thumb),
+    Route("/api/plan/{name}/preview/{n:int}", preview),
     Route("/api/inbox", inbox),
     Route("/api/tool", tool, methods=["POST"]),
     Route("/api/stack", stack, methods=["POST"]),

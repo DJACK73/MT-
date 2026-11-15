@@ -4,6 +4,7 @@ import threading
 from . import avtools
 from .export import Look, export_clips, export_plan
 from .clean import plan_clean, run_clean, size_of
+from .preview import preview_clip
 from pathlib import Path
 from .approval import PlanError, approve, is_approved, plan_id, save_plan
 from .avtools import extract_audio, remove_audio, stack_videos
@@ -200,7 +201,7 @@ def _rel(p: Path, root: Path) -> str:
 
 
 def start_export(root: Path, name: str, kind: str, ratio: str, speed: float,
-                 quality: str, audio: str) -> dict:
+                 quality: str, audio: str, mirror: list | None = None) -> dict:
     global _THREAD
     if kind not in ("video", "clips"):
         raise ValueError(f"type d'export inconnu: {kind}")
@@ -212,13 +213,15 @@ def start_export(root: Path, name: str, kind: str, ratio: str, speed: float,
         raise ValueError(f"qualité inconnue: {quality}")
     if isinstance(speed, bool) or not isinstance(speed, (int, float)) or not 0.5 <= speed <= 2:
         raise ValueError("vitesse: nombre entre 0,5 et 2 attendu")
+    mir = _mirror(mirror or [])
     plan = _load(root, name)
+    mir = _mirror(mir, len(plan.scenes))
     with _LOCK:
         if _JOB.get("state") == "running":
             raise PlanError("un export est déjà en cours")
         _JOB.clear()
         _JOB.update(state="running", kind=kind, name=name)
-    look = Look(ratio=ratio, speed=float(speed), audio=audio)
+    look = Look(ratio=ratio, speed=float(speed), audio=audio, mirror_only=mir)
     crf = _QUALITY[quality]
 
     def work() -> None:
@@ -257,3 +260,27 @@ def do_clean(root: Path, level: int) -> dict:
         raise PlanError("un export est en cours : attends sa fin")
     done, errs = run_clean(root, level)
     return {"deleted": done, "errors": errs}
+
+
+def _mirror(m, n: int | None = None) -> frozenset:
+    if not isinstance(m, (list, tuple, set, frozenset)) or any(isinstance(x, bool) or not isinstance(x, int) for x in m):
+        raise ValueError("miroir: liste de numéros de scène attendue")
+    bad = sorted(x for x in m if n is not None and not 1 <= x <= n)
+    if bad:
+        raise ValueError(f"miroir: scènes inconnues {bad}")
+    return frozenset(m)
+
+
+def preview(root: Path, name: str, n: int, mirror: bool = False, speed: float = 1.0) -> Path:
+    if isinstance(speed, bool) or not isinstance(speed, (int, float)) or not 0.5 <= speed <= 2:
+        raise ValueError("vitesse: nombre entre 0,5 et 2 attendu")
+    plan = _load(root, name)
+    if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= len(plan.scenes):
+        raise ValueError(f"scène inconnue: {n}")
+    sc = plan.scenes[n - 1]
+    src = next((s for s in plan.sources if s.id == sc.source_id), None)
+    if src is None:
+        raise PlanError(f"source absente pour la scène {n}")
+    p = Path(src.path)
+    return preview_clip(p if p.is_absolute() else root / p, sc.start, sc.end, root,
+                        mirror=bool(mirror), speed=float(speed))

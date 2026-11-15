@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 from mt_agent import webapi
@@ -20,7 +21,7 @@ class ServiceTest(unittest.TestCase):
         webapi._JOB.update(state="idle")
 
     def run_job(self, **kw):
-        with mock.patch.object(webapi, "_load", return_value=object()):
+        with mock.patch.object(webapi, "_load", return_value=SimpleNamespace(scenes=[1])):
             webapi.start_export(Path("/r"), "p.json", **{**OK, **kw})
         webapi._THREAD.join(5)
         return webapi.get_job()
@@ -43,7 +44,7 @@ class ServiceTest(unittest.TestCase):
 
     def test_busy(self):
         webapi._JOB.update(state="running")
-        with mock.patch.object(webapi, "_load", return_value=object()):
+        with mock.patch.object(webapi, "_load", return_value=SimpleNamespace(scenes=[1])):
             with self.assertRaises(webapi.PlanError):
                 webapi.start_export(Path("/r"), "p.json", **OK)
 
