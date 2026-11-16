@@ -9,21 +9,6 @@ services:
       - ./output:/app/output
       - ./data:/app/data
       - ./config:/app/config:ro
-  dashboard:
-    profiles: ["dashboard"]
-    build:
-      context: .
-      dockerfile: Dockerfile.dashboard
-    ports:
-      - "127.0.0.1:8502:8501"
-    environment:
-      STREAMLIT_CLIENT_TOOLBAR_MODE: viewer
-    volumes:
-      - ./inbox:/app/inbox:ro
-      - ./music:/app/music:ro
-      - ./workspace:/app/workspace
-      - ./output:/app/output
-
   web:
     profiles: ["web"]
     restart: unless-stopped

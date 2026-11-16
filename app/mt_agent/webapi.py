@@ -97,7 +97,7 @@ def thumbnail(root: Path, name: str, n: int) -> Path | None:
     return make_thumbnails(plan, root)[n - 1]
 
 
-_VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"}  # = dashboard.VIDEO_EXT
+_VIDEO_EXT = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"}
 _TOOLS = {"audio": (extract_audio, ".m4a"), "muet": (remove_audio, "-muet.mp4")}
 
 
