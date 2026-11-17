@@ -19,7 +19,7 @@ services:
     ports:
       - "127.0.0.1:8502:8501"
     volumes:
-      - ./inbox:/app/inbox:ro
+      - ./inbox:/app/inbox
       - ./music:/app/music:ro
       - ./workspace:/app/workspace
       - ./output:/app/output

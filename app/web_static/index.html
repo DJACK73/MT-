@@ -121,7 +121,7 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <div class="box"><h2>Export</h2><p class="sub" id="sorec"></p><div class="row"><label>Vitesse<select id="exspeed"><option value="1">1×</option><option value="0.5">0,5×</option><option value="1.5">1,5×</option><option value="2">2×</option></select></label><label>Qualité<select id="exq"><option value="normal">Normal</option><option value="haute">Haute</option></select></label></div>
 <div class="row" style="margin-top:16px"><button class="btn main" id="ex1" disabled>Exporter la vidéo assemblée</button><button class="btn" id="ex2" disabled>Exporter en clips séparés</button></div><p class="msg" id="exmsg"></p></div></section>
 
-<section id="nettoyage"><h1>Fais de la place</h1><p class="sub">Chaque niveau supprime des fichiers de travail. Tes vidéos sources ne sont pas touchées.</p>
+<section id="nettoyage"><h1>Fais de la place</h1><p class="sub">Chaque niveau supprime des fichiers de travail. Tes vidéos sources ne sont touchées qu’au niveau 3.</p>
 <div class="box" id="lvls"></div><p class="msg" id="clmsg"></p></section>
 </div>
 
@@ -309,12 +309,12 @@ $('cmake').onclick=async()=>{if(!cpOrd.length)return;const k=cpOrd.length,by=new
  cpMark()};
 const _rt=route;route=function(){_rt();if((location.hash||'').slice(1)==='composer')loadComposer()};
 $('ex1').onclick=()=>startEx('video');$('ex2').onclick=()=>startEx('clips');pollJob();updEx();
-const L=[[1,'Niveau 1','Supprime les plans, vignettes et aperçus (dont le cache audio de la musique). Coupe d’abord tes vidéos si tu as besoin des plans.'],[2,'Niveau 2','Ajoute les sorties exportées (dossier output).']];
-$('lvls').innerHTML=L.map(l=>`<div class="lvl"><div><b>${l[1]}</b><p>${l[2]}</p></div><button class="btn bad" data-l="${l[0]}">Nettoyer</button></div>`).join('')+`<div class="lvl"><div><b>Niveau 3</b><p>Vider inbox : supprime les vidéos dans l’Explorateur Windows (dossier en lecture seule ici).</p></div><button class="btn" disabled>Indisponible</button></div>`;
+const L=[[1,'Niveau 1','Supprime les plans, vignettes et aperçus (dont le cache audio de la musique). Coupe d’abord tes vidéos si tu as besoin des plans.'],[2,'Niveau 2','Ajoute les sorties exportées (dossier output).'],[3,'Niveau 3','Vide aussi tes vidéos et musiques sources (inbox/videos, inbox/musique). Les dossiers sont gardés.']];
+$('lvls').innerHTML=L.map(l=>`<div class="lvl"><div><b>${l[1]}</b><p>${l[2]}</p></div><button class="btn bad" data-l="${l[0]}">Nettoyer</button></div>`).join('');
 let clLvl=0;
 $('lvls').onclick=async e=>{const l=+e.target.dataset.l;if(!l)return;
  try{const p=await api('/api/clean/'+l);clLvl=l;
-  $('dtxt').textContent=p.count+' élément(s), '+(p.bytes/1e6).toFixed(1).replace('.',',')+' Mo. Irréversible.';$('dok').disabled=p.count===0;$('dlg').showModal()}catch(x){$('clmsg').textContent=x.message}};
+  $('dtxt').textContent=(l===3?'Supprime tes vidéos et musiques sources (inbox/videos, inbox/musique). ':'')+p.count+' élément(s), '+(p.bytes/1e6).toFixed(1).replace('.',',')+' Mo. Irréversible.';$('dok').disabled=p.count===0;$('dlg').showModal()}catch(x){$('clmsg').textContent=x.message}};
 $('dno').onclick=()=>$('dlg').close();
 $('dok').onclick=async()=>{const l=clLvl;$('dok').disabled=true;
  try{const r=await api('/api/clean/'+l,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:l})});

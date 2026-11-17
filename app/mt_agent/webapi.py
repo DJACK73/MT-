@@ -408,8 +408,8 @@ def start_export(root: Path, name: str, kind: str, ratio: str, speed: float,
 
 
 def _lvl(level: int) -> int:
-    if isinstance(level, bool) or level not in (1, 2):
-        raise ValueError("niveau 1 ou 2 attendu (inbox se vide dans l'Explorateur Windows)")
+    if isinstance(level, bool) or level not in (1, 2, 3):
+        raise ValueError("niveau 1, 2 ou 3 attendu")
     return level
 
 
@@ -422,7 +422,10 @@ def do_clean(root: Path, level: int) -> dict:
     _lvl(level)
     if get_job().get("state") == "running" or get_cutjob().get("state") == "running":
         raise PlanError("un export est en cours : attends sa fin")
-    done, errs = run_clean(root, level)
+    try:
+        done, errs = run_clean(root, level)
+    except PermissionError as e:
+        raise PlanError(str(e)) from e
     return {"deleted": done, "errors": errs}
 
 

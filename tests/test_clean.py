@@ -34,8 +34,15 @@ class CleanTest(unittest.TestCase):
         self.assertEqual(_names(self.root, "inbox"), {"v.mp4", ".gitkeep"})
 
     def test_niveau3(self) -> None:
-        self.assertEqual(run_clean(self.root, 3), (5, []))
-        self.assertEqual(_names(self.root, "inbox"), {".gitkeep"})
+        for rel in ("inbox/videos/v2.mp4", "inbox/videos/.gitkeep", "inbox/musique/m.mp3", "inbox/videos/sub/x.mp4"):
+            f = self.root / rel
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(b"x")
+        self.assertEqual(run_clean(self.root, 3), (6, []))
+        self.assertEqual(_names(self.root, "inbox/videos"), {".gitkeep", "sub"})
+        self.assertEqual(_names(self.root, "inbox/musique"), set())
+        self.assertEqual(_names(self.root, "inbox"), {"v.mp4", ".gitkeep", "videos", "musique"})
+        self.assertTrue((self.root / "inbox/videos/sub/x.mp4").exists())
         self.assertTrue((self.root / "output").is_dir())
         self.assertTrue((self.root / "workspace/archive-x/old.json").exists())
 
@@ -56,10 +63,14 @@ class CleanTest(unittest.TestCase):
 
     @unittest.skipIf(os.geteuid() == 0, "root ignore les droits")
     def test_inbox_lecture_seule_ne_supprime_rien(self) -> None:
-        os.chmod(self.root / "inbox", 0o555)
-        self.addCleanup(os.chmod, self.root / "inbox", 0o755)
+        vd = self.root / "inbox/videos"
+        vd.mkdir(parents=True, exist_ok=True)
+        (vd / "v2.mp4").write_bytes(b"x")
+        os.chmod(vd, 0o555)
+        self.addCleanup(os.chmod, vd, 0o755)
         with self.assertRaises(PermissionError):
             run_clean(self.root, 3)
+        self.assertTrue((vd / "v2.mp4").exists())
         self.assertEqual(_names(self.root, "output"), {"o.mp4"})
         self.assertEqual(_names(self.root, "workspace/plans"), {"a.json"})
 
