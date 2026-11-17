@@ -9,4 +9,4 @@ COPY config /app/config
 ENV PYTHONPATH=/app/app PYTHONUNBUFFERED=1
 RUN useradd -u 1000 -m mt
 USER mt
-ENTRYPOINT ["python", "-m", "mt_agent.cli"]
+ENTRYPOINT ["python", "-m", "mt_agent.cmd"]

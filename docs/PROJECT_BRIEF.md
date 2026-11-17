@@ -101,4 +101,4 @@ Fichiers présents :
 
 ## Prochaine étape exacte
 
-Exécuter un conteneur éphémère depuis l'image `mt-mt` pour vérifier `python -m mt_agent.cli --help` et `ffmpeg -version`, puis enregistrer les résultats dans ce brief.
+Exécuter un conteneur éphémère depuis l'image `mt-mt` pour vérifier `python -m mt_agent.cmd --help` et `ffmpeg -version`, puis enregistrer les résultats dans ce brief.
