@@ -14,7 +14,7 @@ Agent local de montage vidéo modulaire : noyau fiable + options. WSL2, Docker, 
 - Sorties pour CapCut : clips, liste de coupes, SRT.
 - Cadrage : `blur_pad` ou `crop_center` (pas de suivi de visage sur anime/football).
 - Rythme : option secondaire, suspendu (phase à 140 BPM = 182 ms).
-- Batch : `mt batch "inbox/*.mp4" ...` crée des plans en attente. Dashboard : Streamlit, service séparé, port 8501.
+- Batch : `mt batch "inbox/*.mp4" ...` crée des plans en attente. Interface : web (Starlette), service `web`, port 8502.
 
 ## Écarté
 Génération vidéo/voix, orchestration LLM, Remotion, concat `-c copy`, cache de clips par index, uuid4, SQLite pour la déduplication.
